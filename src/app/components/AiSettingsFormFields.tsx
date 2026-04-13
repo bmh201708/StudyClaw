@@ -24,9 +24,11 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
   const set = (patch: Partial<AiSettings>) => onChange({ ...value, ...patch });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 text-[#2d3436]">
       <div className="space-y-2">
-        <Label>连接方式</Label>
+        <Label className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">
+          连接方式
+        </Label>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <button
             type="button"
@@ -39,14 +41,14 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
                 baseUrl: defaultBaseUrl,
               })
             }
-            className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+            className={`rounded-[1.25rem] border-2 px-4 py-4 text-left transition-colors ${
               usingDefaultApi
-                ? "border-sky-300 bg-sky-50 text-slate-900"
-                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                ? "border-[#a8e6cf] bg-[#eff9f2] text-[#2d3436]"
+                : "border-[#edf1f5] bg-white text-[#636e72] hover:border-[#cfe8de]"
             }`}
           >
-            <div className="text-sm font-medium">使用默认 API</div>
-            <div className="mt-1 text-xs leading-relaxed text-slate-500">
+            <div className="text-sm font-bold [font-family:Fredoka,sans-serif]">使用默认 API</div>
+            <div className="mt-1 text-xs leading-relaxed text-[#7b8489]">
               使用服务器上的默认模型配置，不需要在浏览器里填写 API Key。
             </div>
           </button>
@@ -60,14 +62,14 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
                 baseUrl: value.baseUrl || defaultBaseUrl,
               })
             }
-            className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+            className={`rounded-[1.25rem] border-2 px-4 py-4 text-left transition-colors ${
               !usingDefaultApi
-                ? "border-sky-300 bg-sky-50 text-slate-900"
-                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                ? "border-[#aed9e0] bg-[#eef9fb] text-[#2d3436]"
+                : "border-[#edf1f5] bg-white text-[#636e72] hover:border-[#d8e9ed]"
             }`}
           >
-            <div className="text-sm font-medium">自定义 API</div>
-            <div className="mt-1 text-xs leading-relaxed text-slate-500">
+            <div className="text-sm font-bold [font-family:Fredoka,sans-serif]">自定义 API</div>
+            <div className="mt-1 text-xs leading-relaxed text-[#7b8489]">
               手动填写服务商、模型和 API Key，保存在当前浏览器。
             </div>
           </button>
@@ -75,13 +77,13 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
       </div>
 
       {usingDefaultApi ? (
-        <p className="text-xs leading-relaxed rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-slate-600">
+        <p className="rounded-[1rem] border border-[#dbeef2] bg-[#f4fcfd] px-4 py-3 text-xs leading-relaxed text-[#637176]">
           默认 API 由后端服务器提供。部署后通常在 `server/.env` 中配置；你当前腾讯云机器上的实际路径是
           ` /opt/studyclaw-backend/.env`。
         </p>
       ) : (
         showApiHint && (
-          <p className="text-xs text-slate-500 leading-relaxed rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
+          <p className="rounded-[1rem] border border-[#f1f3f6] bg-[#fbfcfd] px-4 py-3 text-xs leading-relaxed text-[#637176]">
             API 密钥仅保存在本机浏览器（localStorage），不会上传到 StudyClaw 服务器。请勿在公共设备上保存真实密钥。
           </p>
         )
@@ -90,7 +92,7 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
       {!usingDefaultApi && (
         <>
           <div className="space-y-2">
-            <Label htmlFor={`${baseId}-provider`}>服务商</Label>
+            <Label htmlFor={`${baseId}-provider`} className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">服务商</Label>
             <select
               id={`${baseId}-provider`}
               value={value.provider}
@@ -107,7 +109,7 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
                 else if (provider === "openai-compatible") baseUrl = defaultBaseUrl;
                 set({ provider, model: nextModel, baseUrl });
               }}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-200"
+              className="w-full rounded-[1.25rem] border-2 border-[#edf1f5] bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-[#aed9e0]"
             >
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic (Claude)</option>
@@ -117,12 +119,12 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
 
           {value.provider !== "openai-compatible" ? (
             <div className="space-y-2">
-              <Label htmlFor={`${baseId}-model`}>模型</Label>
+              <Label htmlFor={`${baseId}-model`} className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">模型</Label>
               <select
                 id={`${baseId}-model`}
                 value={value.model}
                 onChange={(e) => set({ model: e.target.value })}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-200"
+                className="w-full rounded-[1.25rem] border-2 border-[#edf1f5] bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-[#aed9e0]"
               >
                 {presets.map((m) => (
                   <option key={m.value} value={m.value}>
@@ -133,32 +135,32 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor={`${baseId}-model-custom`}>模型名称</Label>
+              <Label htmlFor={`${baseId}-model-custom`} className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">模型名称</Label>
               <Input
                 id={`${baseId}-model-custom`}
                 placeholder="例如 llama-3.1-70b-instruct"
                 value={value.model}
                 onChange={(e) => set({ model: e.target.value })}
-                className="rounded-xl"
+                className="rounded-[1.25rem] border-2 border-[#edf1f5]"
               />
             </div>
           )}
 
           {value.provider === "openai-compatible" && (
             <div className="space-y-2">
-              <Label htmlFor={`${baseId}-base`}>API Base URL</Label>
+              <Label htmlFor={`${baseId}-base`} className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">API Base URL</Label>
               <Input
                 id={`${baseId}-base`}
                 placeholder={defaultBaseUrl}
                 value={value.baseUrl}
                 onChange={(e) => set({ baseUrl: e.target.value })}
-                className="rounded-xl font-mono text-sm"
+                className="rounded-[1.25rem] border-2 border-[#edf1f5] font-mono text-sm"
               />
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor={`${baseId}-key`}>API 密钥</Label>
+            <Label htmlFor={`${baseId}-key`} className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">API 密钥</Label>
             <Input
               id={`${baseId}-key`}
               type="password"
@@ -172,7 +174,7 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
               }
               value={value.apiKey}
               onChange={(e) => set({ apiKey: e.target.value })}
-              className="rounded-xl font-mono text-sm"
+              className="rounded-[1.25rem] border-2 border-[#edf1f5] font-mono text-sm"
             />
           </div>
         </>

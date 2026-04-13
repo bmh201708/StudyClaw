@@ -120,37 +120,61 @@ export function TaskSetup() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
-      {/* Welcome Message */}
-      <div className="space-y-2 py-6">
-        <h1 className="text-4xl sm:text-6xl tracking-tight text-slate-800">
-          What are we <span className="font-semibold">nurturing</span> today?
-        </h1>
-        <p className="max-w-xl text-slate-500">
-          Define your intention. Let the AI clear the path while you maintain your sanctuary.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-8 text-[#2d3436]" style={{ fontFamily: '"Nunito", ui-sans-serif, system-ui, sans-serif' }}>
+      <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
+        <div className="space-y-6 pt-6">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#bfe8d7] bg-[#eff9f2] px-4 py-1.5 text-sm font-bold text-[#4b6c61]">
+            <Sparkles className="h-4 w-4" />
+            QUEST SETUP
+          </div>
+          <div className="space-y-4">
+            <h1 className="text-4xl font-bold leading-[0.95] sm:text-5xl lg:text-6xl [font-family:Fredoka,sans-serif]">
+              What are we
+              <br />
+              <span className="italic text-[#ff9d8d]">nurturing</span> today?
+            </h1>
+            <p className="max-w-xl text-base leading-relaxed text-[#636e72] lg:text-lg">
+              Define your intention. Let the AI clear the path while you keep the momentum playful, visible, and kind.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-[1.6rem] border-2 border-dashed border-[#bfe6ef] bg-[#f8fdff] p-5 text-center">
+              <Sparkles className="mx-auto mb-3 h-8 w-8 text-[#ff9d8d]" />
+              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">AI Breakdown</p>
+              <p className="mt-1 text-xs text-[#6f787c]">Turn a big goal into tiny quests.</p>
+            </div>
+            <div className="rounded-[1.6rem] border-2 border-dashed border-[#cfe9dc] bg-[#f8fdf9] p-5 text-center">
+              <Camera className="mx-auto mb-3 h-8 w-8 text-[#7fd3b4]" />
+              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">Dual Modes</p>
+              <p className="mt-1 text-xs text-[#6f787c]">Digital or physical workflow support.</p>
+            </div>
+            <div className="rounded-[1.6rem] border-2 border-dashed border-[#ffe8af] bg-[#fffdf5] p-5 text-center">
+              <Upload className="mx-auto mb-3 h-8 w-8 text-[#f2be41]" />
+              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">Context Upload</p>
+              <p className="mt-1 text-xs text-[#6f787c]">Feed docs and screenshots into planning.</p>
+            </div>
+          </div>
+        </div>
 
-      {/* Main Setup Card */}
-      <Card className="border-slate-200/80 bg-white/70 backdrop-blur-sm shadow-[0_12px_40px_rgba(15,23,42,0.08)]">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm tracking-[0.22em] uppercase text-slate-500">Task Setup</CardTitle>
-          <CardDescription>
-            Configure your workflow and set your grand goal.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_16px_0_rgba(0,0,0,0.03)]">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">Task Setup</CardTitle>
+            <CardDescription className="text-[#6f787c]">
+              Configure your workflow and set your grand goal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
           {/* Mode Toggle */}
           <div className="space-y-3">
-            <Label className="text-xs tracking-[0.22em] uppercase text-slate-500">Detection Mode</Label>
-            <div className="flex w-full gap-2 rounded-full bg-slate-100 p-1.5 overflow-x-auto">
+            <Label className="text-xs uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">Detection Mode</Label>
+            <div className="flex w-full gap-2 overflow-x-auto rounded-full bg-[#f4f7fa] p-1.5">
               <button
                 type="button"
                 onClick={() => setMode("digital")}
-                className={`flex-1 min-w-max px-3 sm:px-4 py-2 rounded-full transition-colors text-sm ${
+                className={`min-w-max flex-1 rounded-full px-3 py-3 text-sm font-bold transition-colors ${
                   mode === "digital"
-                    ? "bg-white border border-slate-200 text-slate-800 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "border-2 border-[#ffd3cb] bg-[#fff1ef] text-[#2d3436]"
+                    : "text-[#7b8489] hover:text-[#2d3436]"
                 }`}
               >
                 <div className="flex items-center justify-center gap-2 whitespace-nowrap">
@@ -162,10 +186,10 @@ export function TaskSetup() {
               <button
                 type="button"
                 onClick={() => setMode("physical")}
-                className={`flex-1 min-w-max px-3 sm:px-4 py-2 rounded-full transition-colors text-sm ${
+                className={`min-w-max flex-1 rounded-full px-3 py-3 text-sm font-bold transition-colors ${
                   mode === "physical"
-                    ? "bg-white border border-slate-200 text-slate-800 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "border-2 border-[#cfe8de] bg-[#eff9f2] text-[#2d3436]"
+                    : "text-[#7b8489] hover:text-[#2d3436]"
                 }`}
               >
                 <div className="flex items-center justify-center gap-2 whitespace-nowrap">
@@ -178,22 +202,22 @@ export function TaskSetup() {
 
           {/* Grand Goal Input */}
           <div className="space-y-3">
-            <Label htmlFor="goal" className="text-xs tracking-[0.22em] uppercase text-slate-500">The Grand Goal</Label>
+            <Label htmlFor="goal" className="text-xs uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">The Grand Goal</Label>
             <Textarea
               id="goal"
               placeholder="e.g. Architecting a sustainable community garden platform..."
-              className="min-h-[160px] resize-none bg-slate-100/70 border-slate-100"
+              className="min-h-[170px] resize-none rounded-[1.5rem] border-2 border-[#edf1f5] bg-[#fbfcfd] px-4 py-4"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[#6f787c]">
               可只写文字，或搭配下方附件；有附件时会先在后端合并文本再进入工作流。
             </p>
           </div>
 
           {/* Attachments */}
           <div className="space-y-3">
-            <Label className="text-xs tracking-[0.22em] uppercase text-slate-500">参考材料（可选）</Label>
+            <Label className="text-xs uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">参考材料（可选）</Label>
             <input
               ref={fileInputRef}
               type="file"
@@ -235,15 +259,15 @@ export function TaskSetup() {
                 if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
               }}
               onClick={() => fileInputRef.current?.click()}
-              className={`cursor-pointer rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-colors ${
+              className={`cursor-pointer rounded-[1.75rem] border-2 border-dashed px-4 py-8 text-center transition-colors ${
                 isDragging
-                  ? "border-amber-400 bg-amber-50/60"
-                  : "border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50/80"
+                  ? "border-[#ffd97d] bg-[#fff8df]"
+                  : "border-[#d8ecf1] bg-[#f9fdff] hover:border-[#aed9e0] hover:bg-[#f2fbfd]"
               }`}
             >
-              <Upload className="mx-auto mb-2 h-8 w-8 text-slate-400" />
-              <p className="text-sm font-medium text-slate-700">点击上传或拖放文件到此处</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <Upload className="mx-auto mb-2 h-8 w-8 text-[#8bc9d8]" />
+              <p className="text-sm font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">点击上传或拖放文件到此处</p>
+              <p className="mt-1 text-xs text-[#6f787c]">
                 支持 txt / Markdown、Word（.docx）、PDF、常见图片；单文件 ≤ {MAX_ATTACH_BYTES / 1024 / 1024} MiB，最多 {MAX_ATTACH_COUNT} 个
               </p>
             </div>
@@ -252,12 +276,12 @@ export function TaskSetup() {
                 {attachedFiles.map(({ id, file }) => (
                   <li
                     key={id}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-700"
+                    className="flex items-center justify-between gap-2 rounded-[1.2rem] border-2 border-[#edf1f5] bg-white px-3 py-3 text-sm text-[#2d3436]"
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <Paperclip className="h-4 w-4 shrink-0 text-slate-400" />
+                      <Paperclip className="h-4 w-4 shrink-0 text-[#8bc9d8]" />
                       <span className="truncate">{file.name}</span>
-                      <span className="shrink-0 text-xs text-slate-400">
+                      <span className="shrink-0 text-xs text-[#7b8489]">
                         {(file.size / 1024).toFixed(file.size < 1024 ? 2 : 0)} KB
                       </span>
                     </span>
@@ -267,7 +291,7 @@ export function TaskSetup() {
                         e.stopPropagation();
                         removeFile(id);
                       }}
-                      className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                      className="shrink-0 rounded-xl p-1 text-[#7b8489] transition-colors hover:bg-[#f6f8fb] hover:text-[#2d3436]"
                       aria-label={`移除 ${file.name}`}
                     >
                       <X className="h-4 w-4" />
@@ -282,7 +306,7 @@ export function TaskSetup() {
           <Button
             onClick={handleAISmash}
             disabled={!canSubmit || isLoading}
-            className="w-full sm:w-[280px] mx-auto flex h-12 rounded-2xl bg-[#3f5b6b] hover:bg-[#344f5e] text-base text-white"
+            className="mx-auto flex h-14 w-full rounded-[1.35rem] bg-[#ff9d8d] text-base font-bold text-white shadow-[0_12px_24px_rgba(255,157,141,0.28)] hover:bg-[#ff8c79] sm:w-[280px]"
           >
             {isLoading ? (
               <div className="flex items-center gap-2">
@@ -298,23 +322,24 @@ export function TaskSetup() {
           </Button>
         </CardContent>
       </Card>
+      </div>
 
       {/* Privacy Control Card */}
-      <Card className="border-slate-200/80 bg-white/70 backdrop-blur-sm">
+      <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_16px_0_rgba(0,0,0,0.03)]">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Shield className="w-8 h-8 text-slate-600" />
+                <Shield className="w-8 h-8 text-[#636e72]" />
                 <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${
-                  cameraStatus === "connected" ? "bg-emerald-500" : "bg-slate-400"
+                  cameraStatus === "connected" ? "bg-[#7fd3b4]" : "bg-[#b6c0c5]"
                 } ring-2 ring-white`} />
               </div>
               <div>
-                <div className="font-medium text-slate-800">
+                <div className="font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">
                   Privacy Secure
                 </div>
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-[#6f787c]">
                   One-click physical camera control
                 </div>
               </div>
@@ -323,6 +348,7 @@ export function TaskSetup() {
             <Button
               variant={cameraStatus === "connected" ? "destructive" : "default"}
               size="sm"
+              className={cameraStatus === "connected" ? "rounded-[1.1rem]" : "rounded-[1.1rem] bg-[#a8e6cf] text-[#2d3436] hover:bg-[#94ddc1]"}
               onClick={() => setCameraStatus(
                 cameraStatus === "connected" ? "disconnected" : "connected"
               )}

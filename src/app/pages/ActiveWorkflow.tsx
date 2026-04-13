@@ -17,6 +17,7 @@ import {
   Plus,
   Save,
   Smile,
+  Sparkles,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -381,10 +382,10 @@ export function ActiveWorkflow() {
   };
 
   const getPriorityStyle = (priority: PriorityLevel) => {
-    if (priority === "important-urgent") return "bg-rose-50 text-rose-700 border-rose-200";
-    if (priority === "important-not-urgent") return "bg-sky-50 text-sky-700 border-sky-200";
-    if (priority === "not-important-urgent") return "bg-amber-50 text-amber-700 border-amber-200";
-    return "bg-slate-100 text-slate-700 border-slate-200";
+    if (priority === "important-urgent") return "bg-[#fff1ef] text-[#e98573] border-[#ffd3cb]";
+    if (priority === "important-not-urgent") return "bg-[#eef9fb] text-[#62aebf] border-[#cfe8ef]";
+    if (priority === "not-important-urgent") return "bg-[#fff8df] text-[#d2a12d] border-[#ffe7a3]";
+    return "bg-[#f3fbf6] text-[#65b99d] border-[#caeadc]";
   };
 
   const getTaskRank = (task: Task) => {
@@ -485,31 +486,35 @@ export function ActiveWorkflow() {
         </div>
       )}
 
-      <div className="relative z-[2] space-y-6">
+      <div className="relative z-[2] space-y-6 text-[#2d3436]" style={{ fontFamily: '"Nunito", ui-sans-serif, system-ui, sans-serif' }}>
       <BreathingGuideDialog
         open={breathingGuideOpen}
         onOpenChange={setBreathingGuideOpen}
         onContinueToTasks={scrollToTasks}
       />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-          <h1 className="text-3xl sm:text-4xl tracking-tight text-slate-800">Active Workflow</h1>
-          <p className="text-slate-500 max-w-2xl">Goal: {goal}</p>
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#bfe8d7] bg-[#eff9f2] px-4 py-1.5 text-sm font-bold text-[#4b6c61]">
+            <Sparkles className="h-4 w-4" />
+            ACTIVE QUEST
+          </div>
+          <h1 className="text-4xl font-bold tracking-tight text-[#2d3436] sm:text-5xl [font-family:Fredoka,sans-serif]">Active Workflow</h1>
+          <p className="max-w-2xl text-[#636e72]">Goal: {goal}</p>
           {hasLinkedContext && (
-            <p className="text-xs text-emerald-600/90">已合并上传材料至会话上下文。</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#65b99d]">已合并上传材料至会话上下文。</p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-2.5 text-slate-700 shadow-sm shrink-0">
-          <Clock className="w-5 h-5 text-slate-500 shrink-0" />
+        <div className="flex shrink-0 flex-wrap items-center gap-3 rounded-[1.75rem] border-4 border-white bg-white px-5 py-3 text-[#2d3436] shadow-[0_10px_0_rgba(0,0,0,0.03)]">
+          <Clock className="h-5 w-5 shrink-0 text-[#8bc9d8]" />
           <div>
-            <p className="text-xs uppercase tracking-wider text-slate-400">Focus time</p>
-            <p className="text-xl font-mono tabular-nums">{formatTime(focusTime)}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#7b8489] [font-family:Fredoka,sans-serif]">Focus time</p>
+            <p className="text-2xl font-bold tabular-nums [font-family:Fredoka,sans-serif]">{formatTime(focusTime)}</p>
           </div>
           <button
             type="button"
             onClick={() => setIsTimerRunning((v) => !v)}
-            className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200/90 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:border-slate-300"
+            className="ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#edf1f5] bg-[#fdfdfd] text-[#636e72] transition-colors hover:border-[#ffd3cb] hover:bg-[#fff1ef]"
             aria-label={isTimerRunning ? "暂停专注计时" : "继续专注计时"}
           >
             {isTimerRunning ? (
@@ -519,12 +524,12 @@ export function ActiveWorkflow() {
             )}
           </button>
           {isTimerRunning && isFocused && (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+            <span className="rounded-full bg-[#eff9f2] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#65b99d]">
               In flow
             </span>
           )}
           {isDistracted && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">
+            <span className="rounded-full bg-[#fff8df] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#d2a12d]">
               Heavy inbox
             </span>
           )}
@@ -534,11 +539,11 @@ export function ActiveWorkflow() {
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         {/* Left: AI resources, distraction inbox, healing companion */}
         <div className="flex flex-col gap-6 lg:min-h-[min(100%,calc(100vh-10rem))]">
-          <Card className="border-slate-200/80 bg-white/80 shadow-[0_8px_30px_rgba(15,23,42,0.06)] rounded-2xl">
+          <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
             <CardHeader className="pb-2">
-              <p className="text-xs font-medium tracking-[0.2em] uppercase text-slate-400">AI picks for this session</p>
-              <CardTitle className="text-lg text-slate-900">Recommended sites & docs</CardTitle>
-              <CardDescription>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">AI picks for this session</p>
+              <CardTitle className="text-2xl text-[#2d3436] [font-family:Fredoka,sans-serif]">Recommended sites & docs</CardTitle>
+              <CardDescription className="text-[#6f787c]">
                 Based on your goal and current task
                 {firstOpenTask ? `: “${firstOpenTask.text.slice(0, 48)}${firstOpenTask.text.length > 48 ? "…" : ""}”` : ""}.
               </CardDescription>
@@ -550,18 +555,18 @@ export function ActiveWorkflow() {
                   href={pick.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group flex gap-3 rounded-xl border border-slate-200/90 bg-slate-50/50 p-4 transition hover:border-sky-200 hover:bg-sky-50/40"
+                  className="group flex gap-3 rounded-[1.4rem] border-2 border-[#edf1f5] bg-[#fbfcfd] p-4 transition hover:border-[#d8ebef] hover:bg-[#f4fcfd]"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-100 group-hover:text-sky-700">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] bg-white text-[#8bc9d8] shadow-sm ring-1 ring-[#edf1f5]">
                     {pick.kind === "doc" ? <FileText className="h-5 w-5" /> : <Globe className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium text-slate-900 group-hover:text-sky-900">{pick.title}</p>
-                      <ExternalLink className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-sky-600" />
+                      <p className="font-bold text-[#2d3436]">{pick.title}</p>
+                      <ExternalLink className="h-4 w-4 shrink-0 text-[#9aa3a7]" />
                     </div>
-                    <p className="mt-1 text-sm text-slate-500 leading-snug">{pick.description}</p>
-                    <p className="mt-2 text-[11px] uppercase tracking-wide text-slate-400">
+                    <p className="mt-1 text-sm leading-snug text-[#6f787c]">{pick.description}</p>
+                    <p className="mt-2 text-[11px] uppercase tracking-wide text-[#9aa3a7]">
                       {pick.kind === "doc" ? "Document" : "Website"} · opens in new tab
                     </p>
                   </div>
@@ -570,13 +575,13 @@ export function ActiveWorkflow() {
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200/80 bg-white/80 shadow-[0_8px_30px_rgba(15,23,42,0.06)] rounded-2xl">
+          <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-2xl [font-family:Fredoka,sans-serif]">
                 <Plus className="w-5 h-5" />
                 Distraction Escrow Inbox
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-[#6f787c]">
                 Capture thoughts for later - stay focused now
               </CardDescription>
             </CardHeader>
@@ -587,8 +592,9 @@ export function ActiveWorkflow() {
                   value={newDistraction}
                   onChange={(e) => setNewDistraction(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addDistraction()}
+                  className="rounded-[1.25rem] border-2 border-[#edf1f5]"
                 />
-                <Button onClick={addDistraction} size="sm">
+                <Button onClick={addDistraction} size="sm" className="rounded-[1.25rem] bg-[#ff9d8d] text-white hover:bg-[#ff8c79]">
                   Add
                 </Button>
               </div>
@@ -598,10 +604,10 @@ export function ActiveWorkflow() {
                   {distractions.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-start gap-2 p-2 bg-white rounded border border-slate-200"
+                      className="flex items-start gap-2 rounded-[1rem] border-2 border-[#edf1f5] bg-[#fbfcfd] p-3"
                     >
-                      <Circle className="w-3 h-3 text-slate-500 mt-1 flex-shrink-0" />
-                      <p className="text-sm text-slate-700 flex-1">{item.text}</p>
+                      <Circle className="mt-1 h-3 w-3 flex-shrink-0 text-[#ff9d8d]" />
+                      <p className="flex-1 text-sm text-[#3d4648]">{item.text}</p>
                     </div>
                   ))}
                 </div>
@@ -613,33 +619,33 @@ export function ActiveWorkflow() {
             <Card
               className={`overflow-hidden rounded-2xl border transition-colors ${
                 healingProminent
-                  ? "border-violet-200/80 bg-white shadow-[0_16px_48px_rgba(91,33,182,0.08)]"
-                  : "border-slate-200/80 bg-white/90 shadow-sm"
+                  ? "border-[#f8d8d2] bg-white shadow-[0_16px_0_rgba(0,0,0,0.03)]"
+                  : "border-4 border-white bg-white/95 shadow-[0_12px_0_rgba(0,0,0,0.03)]"
               }`}
             >
               <CardContent className="p-6 space-y-5">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-pink-400 text-white shadow-md">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ff9d8d] text-white shadow-md">
                     <Smile className="h-6 w-6" strokeWidth={2} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                    <span className="rounded-full bg-[#fff1ef] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#e98573]">
                       Companion active
                     </span>
-                    <h2 className="text-base font-semibold text-slate-900">The Healing Companion</h2>
+                    <h2 className="text-base font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">The Healing Companion</h2>
                   </div>
                 </div>
 
-                <div className="relative rounded-2xl border border-slate-100 bg-white px-5 py-6 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-                  <span className="absolute left-4 top-3 font-serif text-5xl leading-none text-slate-200 select-none" aria-hidden>
+                <div className="relative rounded-[1.6rem] border-2 border-[#fff0eb] bg-[#fffaf8] px-5 py-6">
+                  <span className="absolute left-4 top-3 select-none font-serif text-5xl leading-none text-[#f4d4cd]" aria-hidden>
                     &ldquo;
                   </span>
-                  <p className="relative z-10 pl-2 pt-4 text-[15px] leading-relaxed text-slate-600">{healingQuote}</p>
+                  <p className="relative z-10 pl-2 pt-4 text-[15px] leading-relaxed text-[#5d666a]">{healingQuote}</p>
                   {healingProminent && (
                     <div className="relative z-10 mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       {isTimerRunning ? (
                         <Button
-                          className="rounded-full bg-[#3f4f5c] text-white hover:bg-[#34424d]"
+                          className="rounded-full bg-[#ff9d8d] text-white hover:bg-[#ff8c79]"
                           onClick={() => {
                             setIsTimerRunning(false);
                             setShowEmpathy(false);
@@ -649,7 +655,7 @@ export function ActiveWorkflow() {
                         </Button>
                       ) : (
                         <Button
-                          className="rounded-full bg-[#3f4f5c] text-white hover:bg-[#34424d]"
+                          className="rounded-full bg-[#ff9d8d] text-white hover:bg-[#ff8c79]"
                           onClick={() => setIsTimerRunning(true)}
                         >
                           Continue
@@ -657,7 +663,7 @@ export function ActiveWorkflow() {
                       )}
                       <Button
                         variant="outline"
-                        className="rounded-full border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100"
+                        className="rounded-full border-[#d8ebef] bg-[#eef9fb] text-[#5fa9ba] hover:bg-[#e5f6f9]"
                         onClick={() => setBreathingGuideOpen(true)}
                       >
                         Guide me through this.
@@ -671,23 +677,23 @@ export function ActiveWorkflow() {
                         setCompanionSoftDismiss(true);
                         setShowEmpathy(false);
                       }}
-                      className="relative z-10 mt-3 text-sm text-slate-400 underline-offset-4 hover:text-slate-600 hover:underline"
+                      className="relative z-10 mt-3 text-sm text-[#9aa3a7] underline-offset-4 hover:text-[#636e72] hover:underline"
                     >
                       Not now.
                     </button>
                   )}
                 </div>
 
-                <div className="rounded-2xl bg-slate-100/80 p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
+                <div className="space-y-3 rounded-[1.6rem] bg-[#f8fdff] p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-[#7b8489]">
                     <Activity className="h-4 w-4" />
                     Active observation
                   </div>
-                  <div className="rounded-xl bg-white p-3 border border-slate-200/80">
-                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-600">
+                  <div className="rounded-[1rem] border-2 border-[#e8f3f6] bg-white p-3">
+                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[#5d666a]">
                       {logicTrace}
                     </pre>
-                    <p className="mt-3 text-xs text-slate-500 leading-relaxed">
+                    <p className="mt-3 text-xs leading-relaxed text-[#6f787c]">
                       Plain language: we look at elapsed focus time, whether tasks have moved forward, and whether you&apos;ve
                       parked distractions—then tune how loudly the companion speaks.
                     </p>
@@ -695,18 +701,18 @@ export function ActiveWorkflow() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-sky-50/90 border border-sky-100 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-sky-800/80">Mindful tip</p>
-                    <p className="mt-2 text-sm text-sky-950/80 leading-snug">
+                  <div className="rounded-[1.4rem] border-2 border-[#d8ebef] bg-[#eef9fb] p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#5fa9ba]">Mindful tip</p>
+                    <p className="mt-2 text-sm leading-snug text-[#47646b]">
                       Lower your shoulders and unclench your jaw—two quick resets that signal safety to your nervous system.
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-sky-50/90 border border-sky-100 p-4">
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-sky-800/80">
+                  <div className="rounded-[1.4rem] border-2 border-[#d8ebef] bg-[#eef9fb] p-4">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#5fa9ba]">
                       <Lightbulb className="h-3.5 w-3.5" />
                       Insight
                     </div>
-                    <p className="mt-2 text-sm text-sky-950/80 leading-snug">
+                    <p className="mt-2 text-sm leading-snug text-[#47646b]">
                       Creative blocks are often just processing phases. Smaller next steps usually beat waiting for clarity.
                     </p>
                   </div>
@@ -719,10 +725,10 @@ export function ActiveWorkflow() {
         {/* Right: task list */}
         <div id="task-breakdown-start" className="space-y-6 lg:sticky lg:top-24">
           {/* Dynamic Task Flow */}
-          <Card className="bg-white/70 border-slate-200/80 backdrop-blur-sm">
+          <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
             <CardHeader>
-              <CardTitle>Task Breakdown</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-2xl text-[#2d3436] [font-family:Fredoka,sans-serif]">Task Breakdown</CardTitle>
+              <CardDescription className="text-[#6f787c]">
                 {completedCount} of {tasks.length} tasks completed
               </CardDescription>
             </CardHeader>
@@ -763,12 +769,12 @@ export function ActiveWorkflow() {
                     opacity: { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
                     boxShadow: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
                   }}
-                  className={`flex items-start gap-3 p-4 rounded-lg border transition-all ${
+                  className={`flex items-start gap-3 rounded-[1.3rem] border-2 p-4 transition-all ${
                     task.completed || pendingCompletionIds.includes(task.id)
-                      ? "bg-emerald-50/70 border-emerald-200"
+                      ? "bg-[#eff9f2] border-[#cfe8de]"
                       : index === 0 && completedCount === 0
-                      ? "bg-sky-50 border-sky-300 ring-2 ring-sky-200"
-                      : "bg-white/70 border-slate-200 hover:border-slate-300"
+                      ? "bg-[#eef9fb] border-[#aed9e0] ring-2 ring-[#d8ebef]"
+                      : "bg-[#fbfcfd] border-[#edf1f5] hover:border-[#ffd3cb]"
                   }`}
                 >
                   <Checkbox
@@ -799,7 +805,7 @@ export function ActiveWorkflow() {
                         <select
                           value={editTaskPriority}
                           onChange={(e) => setEditTaskPriority(e.target.value as PriorityLevel)}
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none"
+                          className="w-full rounded-[1rem] border-2 border-[#edf1f5] bg-[#fbfcfd] px-3 py-2 text-sm outline-none"
                         >
                           <option value="important-urgent">Important + Urgent</option>
                           <option value="important-not-urgent">Important + Not Urgent</option>
@@ -807,11 +813,11 @@ export function ActiveWorkflow() {
                           <option value="not-important-not-urgent">Not Important + Not Urgent</option>
                         </select>
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => saveTaskEdits(task.id)}>
+                          <Button size="sm" className="rounded-[1rem] bg-[#ff9d8d] text-white hover:bg-[#ff8c79]" onClick={() => saveTaskEdits(task.id)}>
                             <Save className="w-4 h-4 mr-1" />
                             Save
                           </Button>
-                          <Button size="sm" variant="outline" onClick={cancelEditingTask}>
+                          <Button size="sm" variant="outline" className="rounded-[1rem] border-2 border-[#edf1f5]" onClick={cancelEditingTask}>
                             <X className="w-4 h-4 mr-1" />
                             Cancel
                           </Button>
@@ -819,24 +825,24 @@ export function ActiveWorkflow() {
                       </>
                     ) : (
                       <>
-                        <p className={`${task.completed || pendingCompletionIds.includes(task.id) ? "line-through text-slate-400" : "text-slate-800"}`}>
+                        <p className={`${task.completed || pendingCompletionIds.includes(task.id) ? "line-through text-[#a5afb4]" : "text-[#2d3436]"}`}>
                           {task.text}
                         </p>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span className="text-xs text-slate-500">{task.duration}</span>
+                          <Clock className="h-3 w-3 text-[#9aa3a7]" />
+                          <span className="text-xs text-[#6f787c]">{task.duration}</span>
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full border ${getPriorityStyle(task.priority)}`}
                           >
                             {getPriorityLabel(task.priority)}
                           </span>
                           {index === 0 && !task.completed && !pendingCompletionIds.includes(task.id) && completedCount === 0 && (
-                            <span className="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full ml-2">
+                            <span className="ml-2 rounded-full bg-[#fff8df] px-2 py-0.5 text-xs font-bold text-[#d2a12d]">
                               Start here! <ArrowRight className="w-3 h-3 inline ml-1" />
                             </span>
                           )}
                           {pendingCompletionIds.includes(task.id) && (
-                            <span className="text-xs bg-emerald-100/80 text-emerald-700 px-2 py-0.5 rounded-full">
+                            <span className="rounded-full bg-[#eff9f2] px-2 py-0.5 text-xs font-bold text-[#65b99d]">
                               Completing...
                             </span>
                           )}
@@ -850,7 +856,7 @@ export function ActiveWorkflow() {
                           />
                         )}
                         {task.note && (
-                          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                          <p className="rounded-[0.9rem] border border-[#edf1f5] bg-white px-2 py-1 text-xs text-[#5d666a]">
                             {task.note}
                           </p>
                         )}
@@ -866,7 +872,7 @@ export function ActiveWorkflow() {
                         onClick={() => toggleTaskPin(task.id)}
                         aria-label="Pin task"
                       >
-                        <Pin className={`w-4 h-4 ${task.isPinned ? "text-sky-700 fill-sky-700" : "text-slate-500"}`} />
+                        <Pin className={`w-4 h-4 ${task.isPinned ? "fill-[#5fa9ba] text-[#5fa9ba]" : "text-[#7b8489]"}`} />
                       </Button>
                     )}
 
@@ -877,7 +883,7 @@ export function ActiveWorkflow() {
                         onClick={() => startEditingTask(task)}
                         aria-label="Edit task"
                       >
-                        <Pencil className="w-4 h-4 text-slate-500" />
+                        <Pencil className="w-4 h-4 text-[#7b8489]" />
                       </Button>
                     )}
 
@@ -888,12 +894,13 @@ export function ActiveWorkflow() {
                 </motion.div>
               ))}
 
-              <div className="p-4 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 space-y-3">
+              <div className="space-y-3 rounded-[1.4rem] border-2 border-dashed border-[#d8ebef] bg-[#f8fdff] p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-700">Add a custom task</p>
+                  <p className="text-sm font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">Add a custom task</p>
                   <Button
                     size="icon"
                     variant="outline"
+                    className="rounded-[1rem] border-2 border-[#edf1f5]"
                     onClick={() => setIsAddTaskExpanded(prev => !prev)}
                     aria-label="Toggle add task form"
                   >
@@ -907,29 +914,31 @@ export function ActiveWorkflow() {
                       placeholder="Task name"
                       value={newTaskName}
                       onChange={(e) => setNewTaskName(e.target.value)}
+                      className="rounded-[1rem] border-2 border-[#edf1f5]"
                     />
                     <Input
                       placeholder="Estimated time (e.g., 15 min)"
                       value={newTaskDuration}
                       onChange={(e) => setNewTaskDuration(e.target.value)}
+                      className="rounded-[1rem] border-2 border-[#edf1f5]"
                     />
                     <Textarea
                       placeholder="Notes (optional)"
                       value={newTaskNote}
                       onChange={(e) => setNewTaskNote(e.target.value)}
-                      className="min-h-20"
+                      className="min-h-20 rounded-[1rem] border-2 border-[#edf1f5]"
                     />
                     <select
                       value={newTaskPriority}
                       onChange={(e) => setNewTaskPriority(e.target.value as PriorityLevel)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none"
+                      className="w-full rounded-[1rem] border-2 border-[#edf1f5] bg-white px-3 py-2 text-sm outline-none"
                     >
                       <option value="important-urgent">Important + Urgent</option>
                       <option value="important-not-urgent">Important + Not Urgent</option>
                       <option value="not-important-urgent">Not Important + Urgent</option>
                       <option value="not-important-not-urgent">Not Important + Not Urgent</option>
                     </select>
-                    <Button onClick={addTask} size="sm" className="w-full sm:w-auto">
+                    <Button onClick={addTask} size="sm" className="w-full rounded-[1rem] bg-[#a8e6cf] text-[#2d3436] hover:bg-[#94ddc1] sm:w-auto">
                       <Plus className="w-4 h-4 mr-1" />
                       Add Task
                     </Button>
@@ -942,7 +951,7 @@ export function ActiveWorkflow() {
           {/* Finish Session Button */}
           <Button
             onClick={handleFinishSession}
-            className="w-full h-12 rounded-2xl bg-[#3f5b6b] hover:bg-[#344f5e]"
+            className="h-14 w-full rounded-[1.35rem] bg-[#ff9d8d] text-base font-bold text-white shadow-[0_12px_24px_rgba(255,157,141,0.28)] hover:bg-[#ff8c79]"
           >
             Finish Session & View Results
           </Button>
