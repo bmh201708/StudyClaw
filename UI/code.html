@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StudyClaw - Gamified Progress Tracker</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&amp;family=Nunito:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#FF9D8D", // Soft Coral
+                        "secondary": "#A8E6CF", // Mint Green
+                        "tertiary": "#AED9E0", // Sky Blue
+                        "quaternary": "#FAD0C4", // Peach
+                        "accent": "#FFD97D", // Sunny Yellow
+                        "surface": "#FDFDFD",
+                        "background": "#F7F9FC",
+                        "on-surface": "#2D3436",
+                        "on-surface-variant": "#636E72"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1.5rem",
+                        "lg": "2.5rem",
+                        "xl": "3.5rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Fredoka", "sans-serif"],
+                        "body": ["Nunito", "sans-serif"],
+                        "label": ["Fredoka", "sans-serif"]
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bento-card {
+            @apply bg-white rounded-[2rem] border-4 border-transparent hover:border-secondary transition-all duration-300 shadow-[0_8px_0_rgba(0,0,0,0.03)];
+        }
+        .achievement-badge {
+            @apply flex flex-col items-center justify-center p-4 bg-tertiary/20 rounded-2xl border-2 border-dashed border-tertiary;
+        }
+    </style>
+</head>
+<body class="bg-background font-body text-on-surface min-h-screen">
+<nav class="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b-4 border-background flex justify-between items-center px-8 h-20">
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
+<span class="material-symbols-outlined">auto_fix_high</span>
+</div>
+<div class="text-2xl font-bold tracking-tight text-on-surface font-headline">StudyClaw</div>
+</div>
+<div class="hidden md:flex items-center gap-8 font-headline text-base">
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Lab</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Quests</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Rankings</a>
+<a class="text-primary font-bold bg-primary/10 px-4 py-2 rounded-full" href="#">Trophies</a>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 bg-accent/20 px-3 py-1.5 rounded-full border-2 border-accent/30">
+<span class="material-symbols-outlined text-accent text-sm">stars</span>
+<span class="font-headline font-bold text-on-surface text-sm">2,450</span>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" data-icon="settings">settings</button>
+<div class="w-10 h-10 rounded-full bg-secondary border-2 border-white shadow-sm overflow-hidden">
+<img alt="avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzmttP7e0tV3xTC6Qi_vxNbpfRnBq_KINrbGtXn_DcnYgHjmPnGIKaU6k18fktKRYCvDTikd_ucl_DO7SmHp-nRupQnI5hNVzPi9Holvmzu5RQe3oVnafI4y40kGLevxNTx_Y-yZZHpRlOhhZUMd3xvUDXeJGJ3vtUqiW_Q36HCetWDtvW8M42147Y_C67bUaDi84XIgiMBwPCCXQMfloi8QrDOAHXYh9i3FUqIN6Yz2i_MhlIdvzWwrHsVgLQEWAG1mnRdWvhKuo"/>
+</div>
+</div>
+</nav>
+<main class="pt-28 pb-24 px-6 md:px-12 lg:px-24 max-w-7xl mx-auto">
+<header class="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<div class="inline-flex items-center gap-2 bg-secondary/20 text-secondary-dark px-4 py-1.5 rounded-full text-sm font-bold mb-4 border border-secondary/30">
+<span class="material-symbols-outlined text-lg">celebration</span>
+                LEVEL UP!
+            </div>
+<h1 class="font-headline font-bold text-4xl md:text-6xl text-on-surface leading-tight">
+                Your Epic Session <br/><span class="text-primary italic">Milestones.</span>
+</h1>
+</div>
+<div class="flex gap-4">
+<button class="bg-white border-b-4 border-gray-100 p-4 rounded-2xl hover:translate-y-[2px] hover:border-b-0 transition-all flex items-center gap-2 font-bold text-on-surface-variant">
+<span class="material-symbols-outlined">share</span>
+</button>
+<button class="bg-white border-b-4 border-gray-100 p-4 rounded-2xl hover:translate-y-[2px] hover:border-b-0 transition-all flex items-center gap-2 font-bold text-on-surface-variant">
+<span class="material-symbols-outlined">download</span>
+</button>
+</div>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<div class="md:col-span-8 bento-card p-8 flex flex-col justify-between relative overflow-hidden">
+<div class="absolute top-0 right-0 p-6 opacity-20">
+<span class="material-symbols-outlined text-[120px] text-primary rotate-12">rocket_launch</span>
+</div>
+<div class="relative z-10">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl">chat_bubble</span>
+</div>
+<h2 class="font-headline text-2xl font-bold">Coach Claws says...</h2>
+</div>
+<p class="text-body text-xl text-on-surface leading-relaxed font-medium">
+                    "OMG! <span class="bg-secondary/30 px-1.5 rounded">You totally crushed your focus goal!</span> 🚀 You stayed in the zone for a massive streak between minute 45 and 120. That complex design project didn't stand a chance against your focus-power. You're basically a productivity ninja now!"
+                </p>
+</div>
+<div class="mt-8 flex flex-wrap gap-3 relative z-10">
+<span class="bg-secondary text-white px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">🔥 2hr Streak</span>
+<span class="bg-tertiary text-on-surface px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">🧠 Brainiac Mode</span>
+<span class="bg-accent text-on-surface px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">⭐ Focus God</span>
+</div>
+</div>
+<div class="md:col-span-4 bento-card p-8 bg-tertiary/10 border-tertiary/20">
+<div class="mb-4">
+<h3 class="text-on-surface-variant font-headline font-bold text-sm uppercase tracking-widest flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary">timer</span>
+                    Total Grind
+                </h3>
+<div class="text-6xl font-headline font-bold text-on-surface mt-2">04:42 <span class="text-xl text-on-surface-variant">hrs</span></div>
+</div>
+<div class="flex items-end gap-2 h-32 mt-6">
+<div class="flex-1 bg-tertiary rounded-t-xl h-[40%]"></div>
+<div class="flex-1 bg-tertiary rounded-t-xl h-[60%]"></div>
+<div class="flex-1 bg-tertiary rounded-t-xl h-[90%]"></div>
+<div class="flex-1 bg-primary rounded-t-xl h-[100%] shadow-[0_-4px_12px_rgba(255,157,141,0.4)]"></div>
+<div class="flex-1 bg-tertiary rounded-t-xl h-[75%]"></div>
+<div class="flex-1 bg-tertiary rounded-t-xl h-[30%]"></div>
+</div>
+</div>
+<div class="md:col-span-4 bento-card p-8 flex flex-col items-center justify-center text-center">
+<h3 class="text-on-surface-variant font-headline font-bold text-sm uppercase tracking-widest mb-6">Quests Cleared</h3>
+<div class="relative flex items-center justify-center">
+<svg class="w-44 h-44 transform -rotate-90">
+<circle class="text-gray-100" cx="88" cy="88" fill="transparent" r="76" stroke="currentColor" stroke-width="16"></circle>
+<circle class="text-secondary" cx="88" cy="88" fill="transparent" r="76" stroke="currentColor" stroke-dasharray="477" stroke-dashoffset="95" stroke-linecap="round" stroke-width="16"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-4xl font-bold font-headline">12/15</span>
+<span class="text-xs font-bold text-secondary uppercase bg-secondary/10 px-2 py-0.5 rounded-full mt-1">80% Done!</span>
+</div>
+</div>
+</div>
+<div class="md:col-span-8 bento-card p-8 border-quaternary/30">
+<h3 class="text-on-surface-variant font-headline font-bold text-sm uppercase tracking-widest mb-6">Bosses Defeated (Distractions)</h3>
+<div class="space-y-3">
+<div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-transparent hover:border-quaternary/50 transition-all">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl">heart_broken</span>
+</div>
+<div>
+<div class="font-bold text-on-surface">Instagram Boss</div>
+<div class="text-sm text-on-surface-variant">3 failed attacks detected</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-black text-on-surface text-lg">12 min</div>
+<div class="text-xs font-bold text-primary uppercase">Dmg Taken</div>
+</div>
+</div>
+<div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-transparent hover:border-quaternary/50 transition-all">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-2xl">mail</span>
+</div>
+<div>
+<div class="font-bold text-on-surface">Outlook Minion</div>
+<div class="text-sm text-on-surface-variant">2 pings parried</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-black text-on-surface text-lg">04 min</div>
+<div class="text-xs font-bold text-tertiary uppercase">Parried</div>
+</div>
+</div>
+</div>
+</div>
+<div class="md:col-span-12 grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+<div class="achievement-badge bg-accent/10 border-accent">
+<span class="material-symbols-outlined text-accent text-4xl mb-2">star_rate</span>
+<span class="font-headline font-bold text-sm text-on-surface">Deep Focus Star Award</span>
+</div>
+<div class="achievement-badge bg-primary/10 border-primary">
+<span class="material-symbols-outlined text-primary text-4xl mb-2">local_fire_department</span>
+<span class="font-headline font-bold text-sm text-on-surface">Daily Streak x5</span>
+</div>
+<div class="achievement-badge bg-secondary/10 border-secondary">
+<span class="material-symbols-outlined text-secondary text-4xl mb-2">verified_user</span>
+<span class="font-headline font-bold text-sm text-on-surface">Unstoppable!</span>
+</div>
+<div class="achievement-badge bg-quaternary/10 border-quaternary">
+<span class="material-symbols-outlined text-quaternary text-4xl mb-2">emoji_events</span>
+<span class="font-headline font-bold text-sm text-on-surface">Session Champ</span>
+</div>
+</div>
+</div>
+<section class="mt-16 p-8 md:p-12 bg-primary rounded-[2.5rem] relative overflow-hidden shadow-xl">
+<div class="absolute -bottom-10 -right-10 w-64 h-64 bg-white/20 rounded-full blur-3xl"></div>
+<div class="absolute top-10 left-10 w-32 h-32 bg-accent/30 rounded-full blur-2xl"></div>
+<div class="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+<div class="max-w-xl text-center md:text-left text-white">
+<h2 class="font-headline text-3xl md:text-4xl font-bold mb-4">Wanna go another round?</h2>
+<p class="font-medium opacity-90 text-lg">You're on fire right now! Experts say keeping the momentum going leads to legendary results. Let's get it!</p>
+</div>
+<div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+<button class="bg-white/20 text-white px-8 py-4 rounded-2xl font-bold border-2 border-white/30 hover:bg-white/30 transition-all">
+                    Save Progress
+                </button>
+<button class="bg-white text-primary px-10 py-4 rounded-2xl font-bold text-xl shadow-lg hover:translate-y-[-4px] hover:shadow-2xl transition-all flex items-center justify-center gap-3">
+                    Start Session
+                    <span class="material-symbols-outlined">play_circle</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<nav class="md:hidden fixed bottom-0 left-0 w-full h-20 px-8 flex justify-between items-center bg-white border-t-4 border-background z-50">
+<div class="flex flex-col items-center text-on-surface-variant">
+<span class="material-symbols-outlined">explore</span>
+</div>
+<div class="flex flex-col items-center text-on-surface-variant">
+<span class="material-symbols-outlined">format_list_bulleted</span>
+</div>
+<div class="flex items-center justify-center bg-primary text-white rounded-2xl w-12 h-12 -mt-12 shadow-lg border-4 border-white">
+<span class="material-symbols-outlined">add</span>
+</div>
+<div class="flex flex-col items-center text-primary">
+<span class="material-symbols-outlined">emoji_events</span>
+</div>
+<div class="flex flex-col items-center text-on-surface-variant">
+<span class="material-symbols-outlined">person</span>
+</div>
+</nav>
+<div class="fixed top-20 right-[-10%] w-[30vw] h-[30vw] bg-secondary/10 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+<div class="fixed bottom-0 left-[-5%] w-[40vw] h-[40vw] bg-tertiary/10 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+
+</body></html>
