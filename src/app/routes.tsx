@@ -30,22 +30,27 @@ function GuardedDashboard() {
   );
 }
 
-export const router = createBrowserRouter([
+export const router = createBrowserRouter(
+  [
+    {
+      path: "/",
+      Component: AiGateway,
+    },
+    {
+      path: "/",
+      Component: Layout,
+      children: [
+        { path: "setup", Component: GuardedTaskSetup },
+        { path: "workflow", Component: GuardedWorkflow },
+        { path: "dashboard", Component: GuardedDashboard },
+      ],
+    },
+    {
+      path: "/welcome",
+      element: <Navigate to="/" replace />,
+    },
+  ],
   {
-    path: "/",
-    Component: AiGateway,
+    basename: import.meta.env.BASE_URL,
   },
-  {
-    path: "/",
-    Component: Layout,
-    children: [
-      { path: "setup", Component: GuardedTaskSetup },
-      { path: "workflow", Component: GuardedWorkflow },
-      { path: "dashboard", Component: GuardedDashboard },
-    ],
-  },
-  {
-    path: "/welcome",
-    element: <Navigate to="/" replace />,
-  },
-]);
+);
