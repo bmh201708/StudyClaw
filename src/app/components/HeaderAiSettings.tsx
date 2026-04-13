@@ -42,7 +42,7 @@ export function HeaderAiSettings() {
     logoutAi();
     setOpen(false);
     toast.message("已清除本地 AI 配置");
-    navigate("/welcome", { replace: true });
+    navigate("/", { replace: true });
   };
 
   return (

@@ -5,7 +5,7 @@ import { useAiSettings } from "../contexts/AiSettingsContext";
 export function RequireAiConfig({ children }: { children: ReactNode }) {
   const { isConfigured } = useAiSettings();
   if (!isConfigured) {
-    return <Navigate to="/welcome" replace />;
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 }

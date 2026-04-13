@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { Layout } from "./components/Layout";
 import { RequireAiConfig } from "./components/RequireAiConfig";
 import { AiGateway } from "./pages/AiGateway";
@@ -32,16 +32,20 @@ function GuardedDashboard() {
 
 export const router = createBrowserRouter([
   {
-    path: "/welcome",
+    path: "/",
     Component: AiGateway,
   },
   {
     path: "/",
     Component: Layout,
     children: [
-      { index: true, Component: GuardedTaskSetup },
+      { path: "setup", Component: GuardedTaskSetup },
       { path: "workflow", Component: GuardedWorkflow },
       { path: "dashboard", Component: GuardedDashboard },
     ],
+  },
+  {
+    path: "/welcome",
+    element: <Navigate to="/" replace />,
   },
 ]);

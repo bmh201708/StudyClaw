@@ -6,13 +6,13 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const steps = [
-    { path: "/", label: "Task Setup" },
+    { path: "/setup", label: "Task Setup" },
     { path: "/workflow", label: "Active Workflow" },
     { path: "/dashboard", label: "Feedback Dashboard" },
   ];
 
   const currentIndex = steps.findIndex((step) =>
-    step.path === "/" ? location.pathname === "/" : location.pathname.startsWith(step.path),
+    location.pathname.startsWith(step.path),
   );
 
   const canGoBack = currentIndex > 0;

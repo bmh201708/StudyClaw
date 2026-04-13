@@ -221,7 +221,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
       localStorage.setItem(ARCHIVE_KEY, JSON.stringify([entry, ...prev].slice(0, 50)));
       sessionStorage.removeItem("sessionData");
       toast.success("会话已归档到本地历史");
-      navigate("/");
+      navigate("/setup");
     } catch {
       toast.error("归档失败");
     }
@@ -229,7 +229,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
 
   const handleStartNewFlow = () => {
     sessionStorage.removeItem("sessionData");
-    navigate("/");
+    navigate("/setup");
   };
 
   if (!sessionData) {
