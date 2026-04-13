@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
+import { generateStudyPlan } from "../ai/service.js";
 import { extractFileText } from "../extractFileText.js";
-import { planWithDefaultLlm } from "../planWithDefaultLlm.js";
 export const analyzeRouter = Router();
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MiB per file
 const MAX_FILES = 10;
@@ -69,7 +69,10 @@ analyzeRouter.post("/", upload.array("attachments", MAX_FILES), async (req, res)
         }
     }
     const contextForAI = sections.join("\n\n---\n\n").slice(0, MAX_CONTEXT_OUT);
-    const aiPlan = await planWithDefaultLlm(goal.trim() || "(来自附件)", contextForAI);
+    const aiPlan = await generateStudyPlan({
+        goal: goal.trim() || "(来自附件)",
+        contextForAI,
+    });
     res.json({
         goal: goal.trim() || "(来自附件)",
         contextForAI,
