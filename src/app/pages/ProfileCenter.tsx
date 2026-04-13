@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Brain, Flame, KeyRound, Mail, Save, Settings2, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { useNavigate } from "react-router";
+import { BarChart3, Brain, Flame, KeyRound, LogOut, Mail, Save, Settings2, ShieldCheck, Sparkles, Star, TimerReset, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { AiSettingsFormFields, defaultAiFormState } from "../components/AiSettingsFormFields";
 import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { ScrollArea } from "../components/ui/scroll-area";
 import { Switch } from "../components/ui/switch";
 import { useAiSettings } from "../contexts/AiSettingsContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -38,7 +41,8 @@ function formatSessionDate(date?: string): string {
 }
 
 export function ProfileCenter() {
-  const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateUser, logout } = useAuth();
   const { preferences, savePreferences, isLoading: isPreferencesLoading } = useUserPreferences();
   const { settings, setSettings, isLoading: isAiLoading } = useAiSettings();
   const [displayName, setDisplayName] = useState(user?.name ?? "");
@@ -119,6 +123,42 @@ export function ProfileCenter() {
     return name.slice(0, 1).toUpperCase();
   }, [user?.name]);
 
+  const statsSummary = useMemo(() => {
+    const recent = stats?.recentSessions ?? [];
+    const focusDays = stats?.last7Days.filter((item) => item.focusTime > 0).length ?? 0;
+    const averageFocusTime =
+      stats && stats.completedSessions > 0
+        ? Math.round(stats.totalFocusTime / stats.completedSessions)
+        : 0;
+    const averageTaskCompletion =
+      recent.length > 0
+        ? Math.round(
+            (recent.reduce((sum, session) => {
+              if (!session.totalTasks) return sum;
+              return sum + session.completedTasks / session.totalTasks;
+            }, 0) /
+              recent.length) *
+              100,
+          )
+        : 0;
+    const bestFocusDay = (stats?.last7Days ?? []).reduce<{ date: string; focusTime: number } | null>(
+      (best, current) => {
+        if (!best || current.focusTime > best.focusTime) {
+          return { date: current.date, focusTime: current.focusTime };
+        }
+        return best;
+      },
+      null,
+    );
+
+    return {
+      focusDays,
+      averageFocusTime,
+      averageTaskCompletion,
+      bestFocusDay,
+    };
+  }, [stats]);
+
   const handleProfileSave = async () => {
     const nextName = displayName.trim();
     if (nextName.length < 2) {
@@ -191,6 +231,16 @@ export function ProfileCenter() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success("已退出登录");
+      navigate("/", { replace: true });
+    } catch {
+      toast.error("退出登录失败");
+    }
+  };
+
   return (
     <div className="space-y-8 text-[#2d3436]" style={{ fontFamily: '"Nunito", ui-sans-serif, system-ui, sans-serif' }}>
       <section className="relative overflow-hidden rounded-[2.6rem] border-4 border-white bg-white/95 px-6 py-7 shadow-[0_18px_0_rgba(0,0,0,0.03)] sm:px-8">
@@ -214,6 +264,20 @@ export function ProfileCenter() {
               <p className="mt-4 max-w-2xl text-base leading-relaxed text-[#636e72]">
                 Manage your identity, focus defaults, AI preferences, and performance history from one radiant dashboard.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge className="rounded-full border-[#ffe0d8] bg-[#fff2ef] px-3 py-1 text-[#c86d5d]">
+                  <Flame className="h-3.5 w-3.5" />
+                  {statsSummary.focusDays} active days this week
+                </Badge>
+                <Badge className="rounded-full border-[#d6eee4] bg-[#f0faf5] px-3 py-1 text-[#54a487]">
+                  <TimerReset className="h-3.5 w-3.5" />
+                  Avg {formatFocusTime(statsSummary.averageFocusTime)} per session
+                </Badge>
+                <Badge className="rounded-full border-[#d7ebf1] bg-[#f4fbfd] px-3 py-1 text-[#4d97a9]">
+                  <Star className="h-3.5 w-3.5" />
+                  {statsSummary.averageTaskCompletion}% task completion
+                </Badge>
+              </div>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3 lg:w-[430px]">
@@ -229,6 +293,15 @@ export function ProfileCenter() {
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7a97ab]">Saved Progress</p>
               <p className="mt-2 text-2xl font-bold [font-family:Fredoka,sans-serif]">{stats?.savedProgressCount ?? 0}</p>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="sm:col-span-3 h-11 rounded-[1.25rem] border-2 border-[#f2d8d1] bg-white/80 text-[#91594d] hover:bg-[#fff5f2]"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              退出登录
+            </Button>
           </div>
         </div>
       </section>
@@ -495,6 +568,24 @@ export function ProfileCenter() {
                     Momentum
                   </div>
                 </div>
+                <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-[1.1rem] border border-[#f0e1c5] bg-[#fff8e7] px-3 py-3">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#b28418]">Best Day</p>
+                    <p className="mt-1 text-sm font-bold text-[#2d3436]">
+                      {statsSummary.bestFocusDay?.focusTime
+                        ? `${formatShortDay(statsSummary.bestFocusDay.date)} · ${formatFocusTime(statsSummary.bestFocusDay.focusTime)}`
+                        : "No data"}
+                    </p>
+                  </div>
+                  <div className="rounded-[1.1rem] border border-[#d8ece2] bg-[#f3fbf7] px-3 py-3">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5ea78c]">Active Days</p>
+                    <p className="mt-1 text-sm font-bold text-[#2d3436]">{statsSummary.focusDays}/7 days</p>
+                  </div>
+                  <div className="rounded-[1.1rem] border border-[#dce9ee] bg-[#f5fbfd] px-3 py-3">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5c90a0]">Avg Completion</p>
+                    <p className="mt-1 text-sm font-bold text-[#2d3436]">{statsSummary.averageTaskCompletion}% recent sessions</p>
+                  </div>
+                </div>
                 {isStatsLoading ? (
                   <div className="text-sm text-[#7b8489]">正在加载统计数据...</div>
                 ) : trend.length > 0 ? (
@@ -532,34 +623,41 @@ export function ProfileCenter() {
                     {stats?.recentSessions.length ?? 0} logged
                   </div>
                 </div>
-                <div className="space-y-3">
-                  {stats?.recentSessions?.length ? (
-                    stats.recentSessions.map((session) => (
-                      <div key={session.id} className="rounded-[1.25rem] border-2 border-[#edf1f5] bg-white px-4 py-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-bold text-[#2d3436]">
-                              {session.goal.length > 70 ? `${session.goal.slice(0, 67)}...` : session.goal}
-                            </p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#96a0a6]">
-                              {formatSessionDate(session.completedAt)}
-                            </p>
+                {stats?.recentSessions?.length ? (
+                  <ScrollArea className="h-[290px] rounded-[1.25rem]">
+                    <div className="space-y-2 pr-4">
+                      {stats.recentSessions.map((session) => (
+                        <div key={session.id} className="rounded-[1.05rem] border-2 border-[#edf1f5] bg-white px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-bold text-[#2d3436]">
+                                {session.goal}
+                              </p>
+                              <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-[#96a0a6]">
+                                {formatSessionDate(session.completedAt)}
+                              </p>
+                            </div>
+                            <div className="shrink-0 rounded-full bg-[#eef9fb] px-3 py-1 text-xs font-bold text-[#4495a8]">
+                              {formatFocusTime(session.focusTime)}
+                            </div>
                           </div>
-                          <div className="rounded-full bg-[#eef9fb] px-3 py-1 text-xs font-bold text-[#4495a8]">
-                            {formatFocusTime(session.focusTime)}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span className="inline-flex rounded-full bg-[#fff7da] px-3 py-1 text-[11px] font-bold text-[#aa7e16]">
+                              {session.completedTasks}/{session.totalTasks} tasks
+                            </span>
+                            <span className="inline-flex rounded-full bg-[#f2fbf6] px-3 py-1 text-[11px] font-bold text-[#54a487]">
+                              completed
+                            </span>
                           </div>
                         </div>
-                        <div className="mt-3 inline-flex rounded-full bg-[#fff7da] px-3 py-1 text-xs font-bold text-[#aa7e16]">
-                          {session.completedTasks}/{session.totalTasks} tasks completed
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-[1.25rem] bg-white px-4 py-4 text-sm text-[#7b8489]">
-                      完成一次 workflow 后，这里会显示你最近 5 次的结果。
+                      ))}
                     </div>
-                  )}
-                </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="rounded-[1.25rem] bg-white px-4 py-4 text-sm text-[#7b8489]">
+                    完成一次 workflow 后，这里会显示你最近 5 次的结果。
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
