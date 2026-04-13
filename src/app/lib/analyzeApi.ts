@@ -1,4 +1,4 @@
-import { apiUrl } from "./sessionApi";
+import { apiUrl, authHeaders } from "./sessionApi";
 
 export type AnalyzeAttachment = {
   originalName: string;
@@ -44,6 +44,7 @@ export async function analyzeSetupContext(goal: string, files: File[]): Promise<
     }
     const res = await fetch(apiUrl("/api/analyze"), {
       method: "POST",
+      headers: authHeaders(),
       body: fd,
     });
     if (!res.ok) {

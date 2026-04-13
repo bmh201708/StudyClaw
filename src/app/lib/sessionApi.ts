@@ -2,16 +2,28 @@
  * 后端会话 API（不含 AI）。开发环境通过 Vite 代理访问 /api → 127.0.0.1:3001
  * 生产环境可设置 VITE_API_URL=https://your-api.example.com
  */
+import { loadAuthSession } from "./authStorage";
+
 export function apiUrl(path: string): string {
   const root = import.meta.env.VITE_API_URL as string | undefined;
   if (root) return `${root.replace(/\/$/, "")}${path}`;
   return path;
 }
 
+export function authHeaders(init?: HeadersInit): HeadersInit {
+  const token = loadAuthSession()?.token;
+  if (!token) return init ?? {};
+  return {
+    ...(init ?? {}),
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 export type WorkflowMode = "digital" | "physical";
 
 export interface ServerSession {
   id: string;
+  userId: string;
   goal: string;
   mode: WorkflowMode;
   status: "active" | "completed";
@@ -35,7 +47,7 @@ export async function createServerSession(
   try {
     const res = await fetch(apiUrl("/api/sessions"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         goal,
         mode,
@@ -67,7 +79,7 @@ export async function completeServerSession(
   try {
     const res = await fetch(apiUrl(`/api/sessions/${sessionId}/complete`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     if (!res.ok) return null;
@@ -84,7 +96,7 @@ export async function patchServerSession(
   try {
     const res = await fetch(apiUrl(`/api/sessions/${sessionId}`), {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(partial),
     });
     if (!res.ok) return null;
@@ -96,7 +108,9 @@ export async function patchServerSession(
 
 export async function fetchCompletedSessions(limit = 20): Promise<ServerSession[]> {
   try {
-    const res = await fetch(apiUrl(`/api/sessions?status=completed&limit=${limit}`));
+    const res = await fetch(apiUrl(`/api/sessions?status=completed&limit=${limit}`), {
+      headers: authHeaders(),
+    });
     if (!res.ok) return [];
     const data = (await res.json()) as { sessions: ServerSession[] };
     return data.sessions ?? [];

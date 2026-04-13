@@ -1,6 +1,6 @@
-# StudyClaw API（非 AI）
+# StudyClaw API
 
-Express + 内存存储，用于**专注会话**的创建、增量更新、结束与已完成列表。
+Express + PostgreSQL，用于**用户注册/登录**、**专注会话持久化**、**附件分析/默认 AI 任务生成**。
 
 ## 运行
 
@@ -25,10 +25,10 @@ npm run dev:full
 
 ```bash
 cp .env.example .env
-docker compose up -d --build api
+docker compose up -d --build
 ```
 
-默认会绑定到 `127.0.0.1:38101`，避免直接暴露到公网。
+默认会绑定到 `127.0.0.1:38101`，并同时启动 `postgres`，避免直接暴露到公网。
 
 如需给前端“使用默认 API”选项提供默认模型，请在部署机器上的 `server/.env` 中配置：
 
@@ -44,14 +44,18 @@ LLM_API_KEY=
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/health` | 健康检查 |
-| POST | `/api/sessions` | 创建会话 `{ goal, mode }` |
-| GET | `/api/sessions?status=completed&limit=20` | 最近已完成会话 |
-| GET | `/api/sessions/:id` | 单条会话 |
-| PATCH | `/api/sessions/:id` | 更新活跃会话（计时、任务快照等） |
-| POST | `/api/sessions/:id/complete` | 结束并归档（可含 `distractionEscrow: string[]`） |
+| POST | `/api/auth/register` | 注册用户 `{ name, email, password }` |
+| POST | `/api/auth/login` | 登录 `{ email, password }` |
+| GET | `/api/auth/me` | 获取当前用户 |
+| POST | `/api/auth/logout` | 退出登录 |
+| POST | `/api/sessions` | 创建会话 `{ goal, mode }`，需登录 |
+| GET | `/api/sessions?status=completed&limit=20` | 最近已完成会话，需登录 |
+| GET | `/api/sessions/:id` | 单条会话，需登录 |
+| PATCH | `/api/sessions/:id` | 更新活跃会话（计时、任务快照等），需登录 |
+| POST | `/api/sessions/:id/complete` | 结束并归档（可含 `distractionEscrow: string[]`），需登录 |
 
-## 下一步（未实现）
+## 当前限制
 
-- SQLite / Postgres 持久化
-- 用户维度与鉴权
-- 工作流中定时 `PATCH` 同步（前端已预留 `patchServerSession`）
+- 图片附件仍未接视觉模型
+- Redis / worker 队列仍未接入
+- 还没有密码重置、邮箱验证等正式账号功能

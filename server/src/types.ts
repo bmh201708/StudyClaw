@@ -4,6 +4,7 @@ export type SessionStatus = "active" | "completed";
 
 export interface Session {
   id: string;
+  userId: string;
   goal: string;
   mode: WorkflowMode;
   status: SessionStatus;
@@ -18,6 +19,14 @@ export interface Session {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateSessionBody {

@@ -5,6 +5,9 @@ services:
       dockerfile: Dockerfile
     container_name: studyclaw-api
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     env_file:
       - .env
     environment:
@@ -29,12 +32,16 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    profiles: ["infra"]
     restart: unless-stopped
     environment:
       POSTGRES_DB: studyclaw
       POSTGRES_USER: studyclaw
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyclaw -d studyclaw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - studyclaw_postgres_data:/var/lib/postgresql/data
     ports:
