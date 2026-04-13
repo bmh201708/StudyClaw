@@ -11,6 +11,7 @@ import { analyzeSetupContext } from "../lib/analyzeApi";
 import { planTasksWithCustomApi } from "../lib/customPlanApi";
 import { fetchRecentProgress, type SavedProgress } from "../lib/progressApi";
 import { useAiSettings } from "../contexts/AiSettingsContext";
+import { useUserPreferences } from "../contexts/UserPreferencesContext";
 
 const MAX_ATTACH_BYTES = 5 * 1024 * 1024;
 const MAX_ATTACH_COUNT = 10;
@@ -29,8 +30,10 @@ function validateFile(file: File): string | null {
 export function TaskSetup() {
   const navigate = useNavigate();
   const { settings } = useAiSettings();
+  const { preferences } = useUserPreferences();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"digital" | "physical">("digital");
+  const [hasModeOverride, setHasModeOverride] = useState(false);
   const [goal, setGoal] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -59,6 +62,12 @@ export function TaskSetup() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasModeOverride && preferences?.defaultWorkflowMode) {
+      setMode(preferences.defaultWorkflowMode);
+    }
+  }, [preferences?.defaultWorkflowMode, hasModeOverride]);
 
   const addFiles = useCallback((list: FileList | File[]) => {
     const incoming = Array.from(list);
@@ -277,7 +286,10 @@ export function TaskSetup() {
             <div className="flex w-full gap-2 overflow-x-auto rounded-full bg-[#f4f7fa] p-1.5">
               <button
                 type="button"
-                onClick={() => setMode("digital")}
+                onClick={() => {
+                  setHasModeOverride(true);
+                  setMode("digital");
+                }}
                 className={`min-w-max flex-1 rounded-full px-3 py-3 text-sm font-bold transition-colors ${
                   mode === "digital"
                     ? "border-2 border-[#ffd3cb] bg-[#fff1ef] text-[#2d3436]"
@@ -292,7 +304,10 @@ export function TaskSetup() {
 
               <button
                 type="button"
-                onClick={() => setMode("physical")}
+                onClick={() => {
+                  setHasModeOverride(true);
+                  setMode("physical");
+                }}
                 className={`min-w-max flex-1 rounded-full px-3 py-3 text-sm font-bold transition-colors ${
                   mode === "physical"
                     ? "border-2 border-[#cfe8de] bg-[#eff9f2] text-[#2d3436]"

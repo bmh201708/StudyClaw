@@ -87,7 +87,7 @@ export function AiSettingsFormFields({ value, onChange, onCustomDraftChange, sho
           >
             <div className="text-sm font-bold [font-family:Fredoka,sans-serif]">自定义 API</div>
             <div className="mt-1 text-xs leading-relaxed text-[#7b8489]">
-              手动填写服务商、模型和 API Key，保存在当前浏览器。
+              手动填写服务商、模型和 API Key，保存到你的账户。
             </div>
           </button>
         </div>
@@ -100,7 +100,7 @@ export function AiSettingsFormFields({ value, onChange, onCustomDraftChange, sho
       ) : (
         showApiHint && (
           <p className="rounded-[1rem] border border-[#f1f3f6] bg-[#fbfcfd] px-4 py-3 text-xs leading-relaxed text-[#637176]">
-            API 密钥仅保存在本机浏览器（localStorage），不会上传到 StudyClaw 服务器。请勿在公共设备上保存真实密钥。
+            自定义 API 密钥会加密保存在你的账户中。页面不会回显明文密钥；重新输入即覆盖更新。
           </p>
         )
       )}
@@ -192,6 +192,11 @@ export function AiSettingsFormFields({ value, onChange, onCustomDraftChange, sho
               onChange={(e) => set({ apiKey: e.target.value })}
               className="rounded-[1.25rem] border-2 border-[#edf1f5] font-mono text-sm"
             />
+            {value.hasStoredApiKey && !value.apiKey.trim() && (
+              <p className="text-xs text-[#6f787c]">
+                已保存密钥：{value.customApiKeyMasked || "已加密存储"}。留空则保持当前密钥不变。
+              </p>
+            )}
           </div>
         </>
       )}

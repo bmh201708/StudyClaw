@@ -34,7 +34,7 @@ export function AiGateway() {
       toast.error("请先登录或注册账号");
       return;
     }
-    if (form.mode === "custom" && !form.apiKey.trim()) {
+    if (form.mode === "custom" && !form.apiKey.trim() && !form.hasStoredApiKey) {
       toast.error("请填写 API 密钥");
       return;
     }
@@ -43,9 +43,14 @@ export function AiGateway() {
       return;
     }
     const normalized = normalizeAiSettings(form);
-    setSettings(normalized);
-    toast.success("已保存 AI 配置");
-    navigate("/setup", { replace: true });
+    void setSettings(normalized)
+      .then(() => {
+        toast.success("已保存 AI 配置");
+        navigate("/setup", { replace: true });
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "保存 AI 配置失败");
+      });
   };
 
   const handleAuthSubmit = async () => {
@@ -97,9 +102,16 @@ export function AiGateway() {
         <div className="text-[3rem] font-bold tracking-tight text-[#8f4338] [font-family:Fredoka,sans-serif] sm:text-[3.2rem]">
           StudyClaw
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-full text-[#8f4338]">
+        <button
+          type="button"
+          onClick={() => {
+            if (isAuthenticated) navigate("/profile");
+          }}
+          className="flex h-11 w-11 items-center justify-center rounded-full text-[#8f4338]"
+          aria-label="Open profile center"
+        >
           <UserCircle2 className="h-7 w-7" />
-        </div>
+        </button>
       </nav>
 
       <main className="mx-auto max-w-[1220px] px-6 pb-16 pt-4 lg:px-10">
@@ -283,7 +295,7 @@ export function AiGateway() {
                 <p className="pt-2 text-center text-[11px] italic leading-relaxed text-[#a19b92]">
                   By continuing, you agree to StudyClaw&apos;s Privacy Policy.
                   <br />
-                  Your API keys are encrypted and stored locally.
+                  Your API keys are encrypted and stored in your account.
                 </p>
               </CardContent>
             </Card>

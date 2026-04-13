@@ -1,10 +1,12 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { ChevronLeft, Settings2, Sparkles, UserRound } from "lucide-react";
 import { HeaderAiSettings } from "./HeaderAiSettings";
+import { useAuth } from "../contexts/AuthContext";
 
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const steps = [
     { path: "/setup", label: "Task Setup" },
     { path: "/workflow", label: "Active Workflow" },
@@ -16,6 +18,7 @@ export function Layout() {
   );
 
   const canGoBack = currentIndex > 0;
+  const initials = (user?.name || "S").trim().slice(0, 1).toUpperCase();
 
   const handleBack = () => {
     if (!canGoBack) return;
@@ -87,9 +90,18 @@ export function Layout() {
                 <Settings2 className="h-4 w-4" />
               </div>
               <HeaderAiSettings />
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-[#a8e6cf] text-[#2d3436] shadow-sm">
-                <UserRound className="h-4 w-4" />
-              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/profile")}
+                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#a8e6cf] text-[#2d3436] shadow-sm transition-transform hover:scale-[1.03]"
+                aria-label="Open profile center"
+              >
+                {user?.name ? (
+                  <span className="text-sm font-bold [font-family:Fredoka,sans-serif]">{initials}</span>
+                ) : (
+                  <UserRound className="h-4 w-4" />
+                )}
+              </button>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { initDb } from "./db.js";
 import { authRouter } from "./routes/auth.js";
+import { accountRouter } from "./routes/account.js";
 import { analyzeRouter } from "./routes/analyze.js";
 import { chatRouter } from "./routes/chat.js";
 import { progressRouter } from "./routes/progress.js";
@@ -16,6 +17,7 @@ app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "studyclaw-api", ts: new Date().toISOString() });
 });
 app.use("/api/auth", authRouter);
+app.use("/api/account", accountRouter);
 app.use("/api/analyze", analyzeRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/progress", progressRouter);
@@ -25,5 +27,5 @@ app.use((_req, res) => {
 });
 await initDb();
 app.listen(PORT, HOST, () => {
-    console.log(`[studyclaw-api] http://${HOST}:${PORT}  (/health, /api/auth, /api/analyze, /api/chat, /api/progress, /api/sessions)`);
+    console.log(`[studyclaw-api] http://${HOST}:${PORT}  (/health, /api/auth, /api/account, /api/analyze, /api/chat, /api/progress, /api/sessions)`);
 });

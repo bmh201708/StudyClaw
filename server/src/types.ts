@@ -45,6 +45,61 @@ export interface User {
   updatedAt: string;
 }
 
+export type ThemeVariant = "radiant";
+export type UiDensity = "comfortable" | "compact";
+
+export interface UserPreferences {
+  userId: string;
+  defaultWorkflowMode: WorkflowMode;
+  focusReminderEnabled: boolean;
+  breakReminderEnabled: boolean;
+  themeVariant: ThemeVariant;
+  uiDensity: UiDensity;
+  updatedAt: string;
+}
+
+export type AiProviderId = "openai" | "anthropic" | "openai-compatible";
+export type AiSettingsMode = "default" | "custom";
+
+export interface UserAiPreferences {
+  userId: string;
+  mode: AiSettingsMode;
+  provider: AiProviderId;
+  model: string;
+  baseUrl: string;
+  hasCustomApiKey: boolean;
+  customApiKeyMasked?: string;
+  updatedAt: string;
+}
+
+export interface AccountPreferencesBundle {
+  preferences: UserPreferences;
+  aiPreferences: UserAiPreferences;
+}
+
+export interface AccountRecentSession {
+  id: string;
+  goal: string;
+  focusTime: number;
+  completedTasks: number;
+  totalTasks: number;
+  completedAt?: string;
+}
+
+export interface AccountStatsPoint {
+  date: string;
+  focusTime: number;
+  completedSessions: number;
+}
+
+export interface AccountStatsResponse {
+  totalFocusTime: number;
+  completedSessions: number;
+  savedProgressCount: number;
+  last7Days: AccountStatsPoint[];
+  recentSessions: AccountRecentSession[];
+}
+
 export interface CreateSessionBody {
   goal: string;
   mode: WorkflowMode;
@@ -105,4 +160,29 @@ export interface WorkflowAssistantBody {
   tasks: WorkflowAssistantTaskSnapshot[];
   distractions: string[];
   messages: WorkflowAssistantMessage[];
+}
+
+export interface AccountProfileUpdateBody {
+  name: string;
+}
+
+export interface ChangePasswordBody {
+  currentPassword: string;
+  nextPassword: string;
+}
+
+export interface UpdateUserPreferencesBody {
+  defaultWorkflowMode?: WorkflowMode;
+  focusReminderEnabled?: boolean;
+  breakReminderEnabled?: boolean;
+  themeVariant?: ThemeVariant;
+  uiDensity?: UiDensity;
+}
+
+export interface UpdateUserAiPreferencesBody {
+  mode: AiSettingsMode;
+  provider: AiProviderId;
+  model: string;
+  baseUrl?: string;
+  customApiKey?: string;
 }

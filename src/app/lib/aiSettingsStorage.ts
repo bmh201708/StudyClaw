@@ -8,6 +8,8 @@ export interface AiSettings {
   apiKey: string;
   /** Base URL for OpenAI-compatible APIs (optional) */
   baseUrl: string;
+  hasStoredApiKey?: boolean;
+  customApiKeyMasked?: string;
 }
 
 type StoredAiSettings = {
@@ -52,14 +54,18 @@ function sanitizeAiSettings(data: Partial<AiSettings> | null | undefined): AiSet
   const model = data.model?.trim() || defaultModel;
 
   if (!model || !provider) return null;
-  if (mode === "custom" && !data.apiKey?.trim()) return null;
+  if (mode === "custom" && !data.apiKey?.trim() && !data.hasStoredApiKey) return null;
 
   return {
     mode,
     provider,
     model,
-    apiKey: mode === "default" ? "" : data.apiKey!.trim(),
+    apiKey: mode === "default" ? "" : data.apiKey?.trim() || "",
     baseUrl: (data.baseUrl || fallbackBase).trim() || fallbackBase,
+    ...(mode === "custom" ? { hasStoredApiKey: Boolean(data.hasStoredApiKey || data.apiKey?.trim()) } : {}),
+    ...(typeof data.customApiKeyMasked === "string" && data.customApiKeyMasked.trim()
+      ? { customApiKeyMasked: data.customApiKeyMasked.trim() }
+      : {}),
   };
 }
 
@@ -132,18 +138,20 @@ export function normalizeAiSettings(s: AiSettings): AiSettings {
       model: defaultModel,
       apiKey: "",
       baseUrl: defaultBaseUrl,
+      hasStoredApiKey: false,
     };
   }
   if (s.provider === "openai") {
-    return { ...s, mode: "custom", baseUrl: defaultBaseUrl };
+    return { ...s, mode: "custom", baseUrl: defaultBaseUrl, hasStoredApiKey: Boolean(s.hasStoredApiKey || s.apiKey.trim()) };
   }
   if (s.provider === "anthropic") {
-    return { ...s, mode: "custom", baseUrl: "https://api.anthropic.com/v1" };
+    return { ...s, mode: "custom", baseUrl: "https://api.anthropic.com/v1", hasStoredApiKey: Boolean(s.hasStoredApiKey || s.apiKey.trim()) };
   }
   return {
     ...s,
     mode: "custom",
     baseUrl: s.baseUrl.trim() || defaultBaseUrl,
+    hasStoredApiKey: Boolean(s.hasStoredApiKey || s.apiKey.trim()),
   };
 }
 

@@ -25,7 +25,7 @@ export function HeaderAiSettings() {
   }, [open, settings]);
 
   const handleSave = () => {
-    if (form.mode === "custom" && !form.apiKey.trim()) {
+    if (form.mode === "custom" && !form.apiKey.trim() && !form.hasStoredApiKey) {
       toast.error("请填写 API 密钥");
       return;
     }
@@ -33,9 +33,14 @@ export function HeaderAiSettings() {
       toast.error("请选择或填写模型名称");
       return;
     }
-    setSettings(normalizeAiSettings(form));
-    toast.success("AI 设置已更新");
-    setOpen(false);
+    void setSettings(normalizeAiSettings(form))
+      .then(() => {
+        toast.success("AI 设置已更新");
+        setOpen(false);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "AI 设置保存失败");
+      });
   };
 
   const handleClearAndReconfigure = () => {
