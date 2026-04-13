@@ -27,6 +27,7 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { BreathingGuideDialog } from "../components/BreathingGuideDialog";
 import { completeServerSession } from "../lib/sessionApi";
+import type { PlannedTask } from "../lib/analyzeApi";
 
 interface Task {
   id: string;
@@ -51,6 +52,40 @@ interface DistractionItem {
 }
 
 type AiPick = { title: string; description: string; url: string; kind: "site" | "doc" };
+
+function loadPlannedTasks(): Task[] | null {
+  const raw = sessionStorage.getItem("plannedTasks");
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as PlannedTask[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    const tasks = parsed
+      .map((task, index) => {
+        if (!task || typeof task !== "object" || typeof task.title !== "string") return null;
+        return {
+          id: `ai-${index + 1}`,
+          text: task.title.trim(),
+          completed: false,
+          duration: typeof task.duration === "string" && task.duration.trim() ? task.duration.trim() : "10 min",
+          note: typeof task.note === "string" ? task.note.trim() : "",
+          priority:
+            task.priority === "important-urgent" ||
+            task.priority === "important-not-urgent" ||
+            task.priority === "not-important-urgent" ||
+            task.priority === "not-important-not-urgent"
+              ? task.priority
+              : "important-not-urgent",
+          isPinned: false,
+        } satisfies Task;
+      })
+      .filter((task): task is Task => Boolean(task));
+
+    return tasks.length > 0 ? tasks : null;
+  } catch {
+    return null;
+  }
+}
 
 function picksForContext(goal: string, activeTaskLabel: string | undefined): AiPick[] {
   const blob = `${goal} ${activeTaskLabel || ""}`.toLowerCase();
@@ -178,6 +213,13 @@ export function ActiveWorkflow() {
 
   // Initialize tasks from mock AI decomposition
   useEffect(() => {
+    const plannedTasks = loadPlannedTasks();
+    if (plannedTasks) {
+      setTasks(plannedTasks);
+      setIsTimerRunning(true);
+      return;
+    }
+
     const mockTasks: Task[] = [
       { id: "1", text: "Open the necessary software/tools", completed: false, duration: "3 min", note: "Prepare all tabs and files before starting.", priority: "important-urgent", isPinned: false },
       { id: "2", text: "Review the main concepts or materials", completed: false, duration: "10 min", note: "Only read key points, avoid deep dives for now.", priority: "important-not-urgent", isPinned: false },

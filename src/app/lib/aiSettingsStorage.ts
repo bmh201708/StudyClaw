@@ -1,6 +1,8 @@
 export type AiProviderId = "openai" | "anthropic" | "openai-compatible";
+export type AiSettingsMode = "default" | "custom";
 
 export interface AiSettings {
+  mode: AiSettingsMode;
   provider: AiProviderId;
   model: string;
   apiKey: string;
@@ -11,6 +13,8 @@ export interface AiSettings {
 const STORAGE_KEY = "studyclaw_ai_settings";
 
 const defaultBaseUrl = "https://api.openai.com/v1";
+const defaultProvider: AiProviderId = "openai";
+const defaultModel = "gpt-4o-mini";
 
 export const AI_MODEL_PRESETS: Record<
   AiProviderId,
@@ -40,13 +44,17 @@ export function loadAiSettings(): AiSettings | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as Partial<AiSettings>;
-    if (!data.apiKey?.trim() || !data.model?.trim() || !data.provider) return null;
-    const provider = data.provider;
+    const mode = data.mode === "default" ? "default" : "custom";
+    const provider = data.provider ?? defaultProvider;
     const fallbackBase = defaultBaseForProvider(provider);
+    const model = data.model?.trim() || defaultModel;
+    if (mode === "custom" && !data.apiKey?.trim()) return null;
+    if (!model || !provider) return null;
     return {
+      mode,
       provider,
-      model: data.model.trim(),
-      apiKey: data.apiKey.trim(),
+      model,
+      apiKey: mode === "default" ? "" : data.apiKey!.trim(),
       baseUrl: (data.baseUrl || fallbackBase).trim() || fallbackBase,
     };
   } catch {
@@ -67,6 +75,16 @@ export function isAiConfigured(): boolean {
 }
 
 export function normalizeAiSettings(s: AiSettings): AiSettings {
+  if (s.mode === "default") {
+    const provider = s.provider || defaultProvider;
+    return {
+      mode: "default",
+      provider,
+      model: s.model.trim() || defaultModel,
+      apiKey: "",
+      baseUrl: defaultBaseForProvider(provider),
+    };
+  }
   if (s.provider === "openai") {
     return { ...s, baseUrl: defaultBaseUrl };
   }
@@ -79,4 +97,8 @@ export function normalizeAiSettings(s: AiSettings): AiSettings {
   };
 }
 
-export { defaultBaseUrl };
+export function isDefaultAiSettings(s: AiSettings | null | undefined): boolean {
+  return s?.mode === "default";
+}
+
+export { defaultBaseUrl, defaultModel, defaultProvider };

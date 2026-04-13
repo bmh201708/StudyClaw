@@ -30,6 +30,15 @@ docker compose up -d --build api
 
 默认会绑定到 `127.0.0.1:38101`，避免直接暴露到公网。
 
+如需给前端“使用默认 API”选项提供默认模型，请在部署机器上的 `server/.env` 中配置：
+
+```bash
+LLM_PROVIDER=openai-compatible
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=
+LLM_API_KEY=
+```
+
 ## 接口一览
 
 | 方法 | 路径 | 说明 |

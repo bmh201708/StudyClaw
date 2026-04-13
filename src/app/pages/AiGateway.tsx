@@ -18,7 +18,7 @@ export function AiGateway() {
   }, [settings]);
 
   const handleContinue = () => {
-    if (!form.apiKey.trim()) {
+    if (form.mode === "custom" && !form.apiKey.trim()) {
       toast.error("请填写 API 密钥");
       return;
     }
@@ -40,13 +40,13 @@ export function AiGateway() {
             <Sparkles className="h-7 w-7" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">StudyClaw</h1>
-          <p className="text-sm text-slate-500">连接你的 AI 模型以使用智能分解与专注辅助（密钥仅保存在本机）。</p>
+          <p className="text-sm text-slate-500">可直接使用服务器默认 API，也可改成你自己的模型和密钥。</p>
         </div>
 
         <Card className="border-slate-200/80 shadow-[0_20px_50px_rgba(15,23,42,0.08)] rounded-2xl bg-white/90 backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-2">
             <CardTitle className="text-lg">AI 连接</CardTitle>
-            <CardDescription>选择服务商与模型，并输入 API 密钥</CardDescription>
+            <CardDescription>选择默认 API，或手动填写服务商、模型和 API 密钥</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pt-2">
             <AiSettingsFormFields value={form} onChange={setForm} />

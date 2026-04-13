@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import multer from "multer";
 import { extractFileText } from "../extractFileText.js";
+import { planWithDefaultLlm } from "../planWithDefaultLlm.js";
 
 export const analyzeRouter = Router();
 
@@ -82,14 +83,8 @@ analyzeRouter.post("/", upload.array("attachments", MAX_FILES), async (req, res)
     }
   }
 
-  let contextForAI = sections.join("\n\n---\n\n").slice(0, MAX_CONTEXT_OUT);
-
-  // 占位：真实环境在此将 contextForAI 发往配置的 LLM / 多模态 API
-  const aiAnalysisStub = {
-    status: "pending_integration" as const,
-    message:
-      "后端已合并文本与附件抽取结果。接入模型后，将用 contextForAI 调用 AI 并返回结构化任务建议。",
-  };
+  const contextForAI = sections.join("\n\n---\n\n").slice(0, MAX_CONTEXT_OUT);
+  const aiPlan = await planWithDefaultLlm(goal.trim() || "(来自附件)", contextForAI);
 
   res.json({
     goal: goal.trim() || "(来自附件)",
@@ -99,7 +94,7 @@ analyzeRouter.post("/", upload.array("attachments", MAX_FILES), async (req, res)
       maxFileBytes: MAX_FILE_BYTES,
       maxFiles: MAX_FILES,
     },
-    ai: aiAnalysisStub,
+    ai: aiPlan,
   });
 });
 

@@ -8,6 +8,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { createServerSession } from "../lib/sessionApi";
 import { analyzeSetupContext } from "../lib/analyzeApi";
+import { useAiSettings } from "../contexts/AiSettingsContext";
 
 const MAX_ATTACH_BYTES = 5 * 1024 * 1024;
 const MAX_ATTACH_COUNT = 10;
@@ -25,6 +26,7 @@ function validateFile(file: File): string | null {
 
 export function TaskSetup() {
   const navigate = useNavigate();
+  const { settings } = useAiSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"digital" | "physical">("digital");
   const [goal, setGoal] = useState("");
@@ -66,8 +68,10 @@ export function TaskSetup() {
     try {
       let contextSummary: string | undefined;
       let displayGoal = goal.trim();
+      let plannedTasksJson: string | null = null;
+      const shouldCallBackendPlanner = settings?.mode === "default" || attachedFiles.length > 0;
 
-      if (attachedFiles.length > 0) {
+      if (shouldCallBackendPlanner) {
         const analysis = await analyzeSetupContext(
           goal,
           attachedFiles.map((x) => x.file),
@@ -78,10 +82,21 @@ export function TaskSetup() {
         }
         contextSummary = analysis.contextForAI;
         if (!displayGoal) displayGoal = analysis.goal?.trim() || "(来自附件)";
+        if (analysis.ai?.tasks?.length) {
+          plannedTasksJson = JSON.stringify(analysis.ai.tasks);
+          toast.success("已生成 AI 任务计划");
+        } else if (settings?.mode === "default") {
+          toast.warning(analysis.ai?.message || "默认 AI 暂未返回任务计划，将继续使用基础流程。");
+        }
       }
 
       sessionStorage.setItem("currentGoal", displayGoal || "(来自附件)");
       sessionStorage.setItem("workflowMode", mode);
+      if (plannedTasksJson) {
+        sessionStorage.setItem("plannedTasks", plannedTasksJson);
+      } else {
+        sessionStorage.removeItem("plannedTasks");
+      }
       if (contextSummary?.trim()) {
         sessionStorage.setItem("analysisContext", contextSummary);
       } else {

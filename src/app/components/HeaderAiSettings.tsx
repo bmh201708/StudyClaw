@@ -25,7 +25,7 @@ export function HeaderAiSettings() {
   }, [open, settings]);
 
   const handleSave = () => {
-    if (!form.apiKey.trim()) {
+    if (form.mode === "custom" && !form.apiKey.trim()) {
       toast.error("请填写 API 密钥");
       return;
     }
@@ -58,7 +58,7 @@ export function HeaderAiSettings() {
       <DialogContent className="sm:max-w-md max-h-[min(90vh,640px)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>AI 与模型</DialogTitle>
-          <DialogDescription>更改服务商、模型或 API 密钥。仅保存在本机浏览器。</DialogDescription>
+          <DialogDescription>可切换为服务器默认 API，或继续使用你自己的服务商、模型和密钥。</DialogDescription>
         </DialogHeader>
         <AiSettingsFormFields value={form} onChange={setForm} showApiHint />
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
