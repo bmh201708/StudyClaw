@@ -49,7 +49,7 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
           >
             <div className="text-sm font-bold [font-family:Fredoka,sans-serif]">使用默认 API</div>
             <div className="mt-1 text-xs leading-relaxed text-[#7b8489]">
-              使用服务器上的默认模型配置，不需要在浏览器里填写 API Key。
+              使用StudyClaw提供的AI大模型。
             </div>
           </button>
           <button
@@ -78,8 +78,7 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
 
       {usingDefaultApi ? (
         <p className="rounded-[1rem] border border-[#dbeef2] bg-[#f4fcfd] px-4 py-3 text-xs leading-relaxed text-[#637176]">
-          默认 API 由后端服务器提供。部署后通常在 `server/.env` 中配置；你当前腾讯云机器上的实际路径是
-          ` /opt/studyclaw-backend/.env`。
+          默认API由StudyClaw提供，但额度有限
         </p>
       ) : (
         showApiHint && (
