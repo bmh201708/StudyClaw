@@ -191,6 +191,23 @@ export function TaskSetup() {
               Define your intention. Let the AI clear the path while you keep the momentum playful, visible, and kind.
             </p>
           </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-[1.6rem] border-2 border-dashed border-[#bfe6ef] bg-[#f8fdff] p-5 text-center">
+              <Sparkles className="mx-auto mb-3 h-8 w-8 text-[#ff9d8d]" />
+              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">AI Breakdown</p>
+              <p className="mt-1 text-xs text-[#6f787c]">Turn a big goal into tiny quests.</p>
+            </div>
+            <div className="rounded-[1.6rem] border-2 border-dashed border-[#cfe9dc] bg-[#f8fdf9] p-5 text-center">
+              <Camera className="mx-auto mb-3 h-8 w-8 text-[#7fd3b4]" />
+              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">Dual Modes</p>
+              <p className="mt-1 text-xs text-[#6f787c]">Digital or physical workflow support.</p>
+            </div>
+            <div className="rounded-[1.6rem] border-2 border-dashed border-[#ffe8af] bg-[#fffdf5] p-5 text-center">
+              <Upload className="mx-auto mb-3 h-8 w-8 text-[#f2be41]" />
+              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">Context Upload</p>
+              <p className="mt-1 text-xs text-[#6f787c]">Feed docs and screenshots into planning.</p>
+            </div>
+          </div>
           <div className="rounded-[2rem] border-4 border-white bg-white/95 p-5 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
@@ -242,23 +259,6 @@ export function TaskSetup() {
                   还没有已保存的 progress。完成一次 session 后，在 Dashboard 点击 Save Progress 就会出现在这里。
                 </div>
               )}
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-[1.6rem] border-2 border-dashed border-[#bfe6ef] bg-[#f8fdff] p-5 text-center">
-              <Sparkles className="mx-auto mb-3 h-8 w-8 text-[#ff9d8d]" />
-              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">AI Breakdown</p>
-              <p className="mt-1 text-xs text-[#6f787c]">Turn a big goal into tiny quests.</p>
-            </div>
-            <div className="rounded-[1.6rem] border-2 border-dashed border-[#cfe9dc] bg-[#f8fdf9] p-5 text-center">
-              <Camera className="mx-auto mb-3 h-8 w-8 text-[#7fd3b4]" />
-              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">Dual Modes</p>
-              <p className="mt-1 text-xs text-[#6f787c]">Digital or physical workflow support.</p>
-            </div>
-            <div className="rounded-[1.6rem] border-2 border-dashed border-[#ffe8af] bg-[#fffdf5] p-5 text-center">
-              <Upload className="mx-auto mb-3 h-8 w-8 text-[#f2be41]" />
-              <p className="text-sm font-bold [font-family:Fredoka,sans-serif]">Context Upload</p>
-              <p className="mt-1 text-xs text-[#6f787c]">Feed docs and screenshots into planning.</p>
             </div>
           </div>
         </div>

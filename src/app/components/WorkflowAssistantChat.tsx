@@ -57,13 +57,18 @@ export function WorkflowAssistantChat({
     setIsLoading(true);
 
     try {
+      const apiMessages = nextMessages.filter((message, index) => {
+        if (message.role !== "user" && message.role !== "assistant") return false;
+        return !(index === 0 && message.content === initialAssistantMessage.content);
+      });
+
       const response = await sendWorkflowAssistantMessage({
         sessionId,
         goal,
         focusTime,
         tasks,
         distractions,
-        messages: nextMessages.filter((message) => message.role === "user" || message.role === "assistant"),
+        messages: apiMessages,
       });
 
       setMessages((prev) => [...prev, { role: "assistant", content: response.message }]);
