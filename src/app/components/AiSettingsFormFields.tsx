@@ -6,6 +6,7 @@ import {
   defaultBaseUrl,
   defaultModel,
   defaultProvider,
+  loadLastCustomAiSettings,
   type AiProviderId,
   type AiSettings,
 } from "../lib/aiSettingsStorage";
@@ -13,15 +14,34 @@ import {
 type Props = {
   value: AiSettings;
   onChange: (next: AiSettings) => void;
+  onCustomDraftChange?: (next: AiSettings) => void;
   showApiHint?: boolean;
 };
 
-export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Props) {
+function fallbackCustomSettings(): AiSettings {
+  return (
+    loadLastCustomAiSettings() ?? {
+      mode: "custom",
+      provider: defaultProvider,
+      model: defaultModel,
+      apiKey: "",
+      baseUrl: defaultBaseUrl,
+    }
+  );
+}
+
+export function AiSettingsFormFields({ value, onChange, onCustomDraftChange, showApiHint = true }: Props) {
   const baseId = useId();
   const presets = AI_MODEL_PRESETS[value.provider];
   const usingDefaultApi = value.mode === "default";
 
-  const set = (patch: Partial<AiSettings>) => onChange({ ...value, ...patch });
+  const set = (patch: Partial<AiSettings>) => {
+    const next = { ...value, ...patch };
+    onChange(next);
+    if (next.mode === "custom") {
+      onCustomDraftChange?.(next);
+    }
+  };
 
   return (
     <div className="space-y-5 text-[#2d3436]">
@@ -54,14 +74,11 @@ export function AiSettingsFormFields({ value, onChange, showApiHint = true }: Pr
           </button>
           <button
             type="button"
-            onClick={() =>
-              set({
-                mode: "custom",
-                provider: value.provider || defaultProvider,
-                model: value.model || defaultModel,
-                baseUrl: value.baseUrl || defaultBaseUrl,
-              })
-            }
+            onClick={() => {
+              const lastCustom = fallbackCustomSettings();
+              onChange(lastCustom);
+              onCustomDraftChange?.(lastCustom);
+            }}
             className={`rounded-[1.25rem] border-2 px-4 py-4 text-left transition-colors ${
               !usingDefaultApi
                 ? "border-[#aed9e0] bg-[#eef9fb] text-[#2d3436]"

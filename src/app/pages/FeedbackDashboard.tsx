@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
+import { createSavedProgress } from "../lib/progressApi";
 
 interface SessionData {
   focusTime: number;
@@ -31,9 +32,8 @@ interface SessionData {
   goal: string;
   distractionEscrow?: string[];
   serverSessionId?: string;
+  contextSummary?: string;
 }
-
-const ARCHIVE_KEY = "studyClaw_archivedSessions";
 
 function formatDurationClock(seconds: number): string {
   const totalMins = Math.floor(seconds / 60);
@@ -215,16 +215,25 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
 
   const handleArchiveSession = () => {
     if (!sessionData) return;
-    try {
-      const prev = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || "[]") as unknown[];
-      const entry = { ...sessionData, archivedAt: new Date().toISOString() };
-      localStorage.setItem(ARCHIVE_KEY, JSON.stringify([entry, ...prev].slice(0, 50)));
-      sessionStorage.removeItem("sessionData");
-      toast.success("会话已归档到本地历史");
-      navigate("/setup");
-    } catch {
-      toast.error("归档失败");
-    }
+    createSavedProgress({
+      sourceSessionId: sessionData.serverSessionId,
+      goal: sessionData.goal,
+      focusTime: sessionData.focusTime,
+      completedTasks: sessionData.completedTasks,
+      totalTasks: sessionData.totalTasks,
+      distractionCount: sessionData.distractionCount,
+      completedTaskTitles: sessionData.tasks,
+      distractionEscrow: sessionData.distractionEscrow ?? [],
+      contextSummary: sessionData.contextSummary,
+    })
+      .then(() => {
+        sessionStorage.removeItem("sessionData");
+        toast.success("进度已保存到云端");
+        navigate("/setup");
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "保存进度失败");
+      });
   };
 
   const handleStartNewFlow = () => {

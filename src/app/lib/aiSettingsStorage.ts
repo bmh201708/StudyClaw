@@ -10,6 +10,11 @@ export interface AiSettings {
   baseUrl: string;
 }
 
+type StoredAiSettings = {
+  current: AiSettings;
+  lastCustom?: AiSettings;
+};
+
 const STORAGE_KEY = "studyclaw_ai_settings";
 
 const defaultBaseUrl = "https://api.openai.com/v1";
@@ -39,31 +44,76 @@ function defaultBaseForProvider(p: AiProviderId): string {
   return defaultBaseUrl;
 }
 
-export function loadAiSettings(): AiSettings | null {
+function sanitizeAiSettings(data: Partial<AiSettings> | null | undefined): AiSettings | null {
+  if (!data) return null;
+  const mode = data.mode === "default" ? "default" : "custom";
+  const provider = data.provider ?? defaultProvider;
+  const fallbackBase = defaultBaseForProvider(provider);
+  const model = data.model?.trim() || defaultModel;
+
+  if (!model || !provider) return null;
+  if (mode === "custom" && !data.apiKey?.trim()) return null;
+
+  return {
+    mode,
+    provider,
+    model,
+    apiKey: mode === "default" ? "" : data.apiKey!.trim(),
+    baseUrl: (data.baseUrl || fallbackBase).trim() || fallbackBase,
+  };
+}
+
+function readStoredAiSettings(): StoredAiSettings | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as Partial<AiSettings>;
-    const mode = data.mode === "default" ? "default" : "custom";
-    const provider = data.provider ?? defaultProvider;
-    const fallbackBase = defaultBaseForProvider(provider);
-    const model = data.model?.trim() || defaultModel;
-    if (mode === "custom" && !data.apiKey?.trim()) return null;
-    if (!model || !provider) return null;
+
+    const data = JSON.parse(raw) as Partial<StoredAiSettings> | Partial<AiSettings>;
+    if ("current" in data) {
+      const current = sanitizeAiSettings(data.current);
+      if (!current) return null;
+
+      const lastCustom = sanitizeAiSettings(data.lastCustom);
+      return {
+        current,
+        ...(lastCustom?.mode === "custom" ? { lastCustom } : {}),
+      };
+    }
+
+    const current = sanitizeAiSettings(data);
+    if (!current) return null;
+
     return {
-      mode,
-      provider,
-      model,
-      apiKey: mode === "default" ? "" : data.apiKey!.trim(),
-      baseUrl: (data.baseUrl || fallbackBase).trim() || fallbackBase,
+      current,
+      ...(current.mode === "custom" ? { lastCustom: current } : {}),
     };
   } catch {
     return null;
   }
 }
 
+export function loadAiSettings(): AiSettings | null {
+  return readStoredAiSettings()?.current ?? null;
+}
+
+export function loadLastCustomAiSettings(): AiSettings | null {
+  return readStoredAiSettings()?.lastCustom ?? null;
+}
+
 export function saveAiSettings(settings: AiSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  const normalized = normalizeAiSettings(settings);
+  const existing = readStoredAiSettings();
+  const lastCustom =
+    normalized.mode === "custom"
+      ? normalized
+      : existing?.lastCustom;
+
+  const payload: StoredAiSettings = {
+    current: normalized,
+    ...(lastCustom ? { lastCustom } : {}),
+  };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
 export function clearAiSettings(): void {
@@ -76,23 +126,23 @@ export function isAiConfigured(): boolean {
 
 export function normalizeAiSettings(s: AiSettings): AiSettings {
   if (s.mode === "default") {
-    const provider = s.provider || defaultProvider;
     return {
       mode: "default",
-      provider,
-      model: s.model.trim() || defaultModel,
+      provider: defaultProvider,
+      model: defaultModel,
       apiKey: "",
-      baseUrl: defaultBaseForProvider(provider),
+      baseUrl: defaultBaseUrl,
     };
   }
   if (s.provider === "openai") {
-    return { ...s, baseUrl: defaultBaseUrl };
+    return { ...s, mode: "custom", baseUrl: defaultBaseUrl };
   }
   if (s.provider === "anthropic") {
-    return { ...s, baseUrl: "https://api.anthropic.com/v1" };
+    return { ...s, mode: "custom", baseUrl: "https://api.anthropic.com/v1" };
   }
   return {
     ...s,
+    mode: "custom",
     baseUrl: s.baseUrl.trim() || defaultBaseUrl,
   };
 }

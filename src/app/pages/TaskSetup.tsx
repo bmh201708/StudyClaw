@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Paperclip, Sparkles, Camera, Shield, Upload, X } from "lucide-react";
+import { Paperclip, Sparkles, Camera, Shield, Upload, X, Clock3, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
@@ -8,6 +8,8 @@ import { Textarea } from "../components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { createServerSession } from "../lib/sessionApi";
 import { analyzeSetupContext } from "../lib/analyzeApi";
+import { planTasksWithCustomApi } from "../lib/customPlanApi";
+import { fetchRecentProgress, type SavedProgress } from "../lib/progressApi";
 import { useAiSettings } from "../contexts/AiSettingsContext";
 
 const MAX_ATTACH_BYTES = 5 * 1024 * 1024;
@@ -34,8 +36,29 @@ export function TaskSetup() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<"connected" | "disconnected">("connected");
+  const [recentProgress, setRecentProgress] = useState<SavedProgress[]>([]);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(true);
 
   const canSubmit = Boolean(goal.trim() || attachedFiles.length > 0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchRecentProgress(3)
+      .then((items) => {
+        if (!cancelled) setRecentProgress(items);
+      })
+      .catch(() => {
+        if (!cancelled) setRecentProgress([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingProgress(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const addFiles = useCallback((list: FileList | File[]) => {
     const incoming = Array.from(list);
@@ -61,6 +84,24 @@ export function TaskSetup() {
     setAttachedFiles((prev) => prev.filter((x) => x.id !== id));
   }, []);
 
+  const formatRecentFocus = (seconds: number) => {
+    const mins = Math.max(1, Math.floor(seconds / 60));
+    if (mins >= 60) {
+      const hrs = Math.floor(mins / 60);
+      const rest = mins % 60;
+      return rest ? `${hrs}h ${rest}m` : `${hrs}h`;
+    }
+    return `${mins}m`;
+  };
+
+  const formatSavedAt = (iso: string) =>
+    new Intl.DateTimeFormat("zh-CN", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+
   const handleAISmash = async () => {
     if (!canSubmit) return;
 
@@ -69,9 +110,9 @@ export function TaskSetup() {
       let contextSummary: string | undefined;
       let displayGoal = goal.trim();
       let plannedTasksJson: string | null = null;
-      const shouldCallBackendPlanner = settings?.mode === "default" || attachedFiles.length > 0;
+      const shouldExtractAttachments = attachedFiles.length > 0;
 
-      if (shouldCallBackendPlanner) {
+      if (shouldExtractAttachments || settings?.mode === "default") {
         const analysis = await analyzeSetupContext(
           goal,
           attachedFiles.map((x) => x.file),
@@ -82,11 +123,24 @@ export function TaskSetup() {
         }
         contextSummary = analysis.contextForAI;
         if (!displayGoal) displayGoal = analysis.goal?.trim() || "(来自附件)";
-        if (analysis.ai?.tasks?.length) {
+        if (settings?.mode === "default" && analysis.ai?.tasks?.length) {
           plannedTasksJson = JSON.stringify(analysis.ai.tasks);
           toast.success("已生成 AI 任务计划");
         } else if (settings?.mode === "default") {
           toast.warning(analysis.ai?.message || "默认 AI 暂未返回任务计划，将继续使用基础流程。");
+        }
+      }
+
+      if (settings?.mode === "custom") {
+        const customContext = contextSummary?.trim() || displayGoal || goal.trim();
+        const customGoal = displayGoal || goal.trim();
+        const customPlan = await planTasksWithCustomApi(settings, customGoal || "(未命名目标)", customContext || customGoal || "(未命名目标)");
+
+        if (customPlan.tasks?.length) {
+          plannedTasksJson = JSON.stringify(customPlan.tasks);
+          toast.success("已使用自定义 API 生成任务计划");
+        } else {
+          toast.warning(customPlan.message || "自定义 API 暂未返回任务计划，将继续使用基础流程。");
         }
       }
 
@@ -136,6 +190,59 @@ export function TaskSetup() {
             <p className="max-w-xl text-base leading-relaxed text-[#636e72] lg:text-lg">
               Define your intention. Let the AI clear the path while you keep the momentum playful, visible, and kind.
             </p>
+          </div>
+          <div className="rounded-[2rem] border-4 border-white bg-white/95 p-5 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">
+                  Recent Progress
+                </p>
+                <p className="mt-1 text-sm text-[#6f787c]">Your latest saved wins, ready for a quick glance.</p>
+              </div>
+              <div className="rounded-full bg-[#eff9f2] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#65b99d]">
+                Top 3
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {isLoadingProgress ? (
+                <div className="rounded-[1.35rem] bg-[#f8fbfd] px-4 py-4 text-sm text-[#7b8489]">
+                  正在加载最近保存的 progress...
+                </div>
+              ) : recentProgress.length > 0 ? (
+                recentProgress.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-[1.35rem] border-2 border-[#edf1f5] bg-[#fbfcfd] px-4 py-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-[#2d3436]">
+                          {item.goal.length > 72 ? `${item.goal.slice(0, 69)}...` : item.goal}
+                        </p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#96a0a6]">
+                          Saved {formatSavedAt(item.savedAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#eef9fb] px-3 py-1 text-xs font-bold text-[#62aebf]">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {formatRecentFocus(item.focusTime)}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#fff1ef] px-3 py-1 text-xs font-bold text-[#e98573]">
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        {item.completedTasks}/{item.totalTasks} tasks
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[1.35rem] bg-[#f8fbfd] px-4 py-4 text-sm text-[#7b8489]">
+                  还没有已保存的 progress。完成一次 session 后，在 Dashboard 点击 Save Progress 就会出现在这里。
+                </div>
+              )}
+            </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-[1.6rem] border-2 border-dashed border-[#bfe6ef] bg-[#f8fdff] p-5 text-center">

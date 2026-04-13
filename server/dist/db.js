@@ -59,6 +59,27 @@ export async function initDb() {
         CREATE INDEX IF NOT EXISTS auth_tokens_user_id_idx
         ON auth_tokens (user_id, expires_at DESC);
       `);
+            await pool.query(`
+        CREATE TABLE IF NOT EXISTS saved_progress (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+          source_session_id TEXT REFERENCES workflow_sessions(id) ON DELETE SET NULL,
+          goal TEXT NOT NULL,
+          focus_time INTEGER NOT NULL DEFAULT 0,
+          completed_tasks INTEGER NOT NULL DEFAULT 0,
+          total_tasks INTEGER NOT NULL DEFAULT 0,
+          distraction_count INTEGER NOT NULL DEFAULT 0,
+          completed_task_titles JSONB NOT NULL DEFAULT '[]'::jsonb,
+          distraction_escrow JSONB NOT NULL DEFAULT '[]'::jsonb,
+          context_summary TEXT,
+          saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+            await pool.query(`
+        CREATE INDEX IF NOT EXISTS saved_progress_user_saved_idx
+        ON saved_progress (user_id, saved_at DESC, created_at DESC);
+      `);
         })();
     }
     return initPromise;
@@ -94,5 +115,26 @@ export function mapSession(row) {
         createdAt: toIso(row.created_at),
         updatedAt: toIso(row.updated_at),
         ...(row.completed_at ? { completedAt: toIso(row.completed_at) } : {}),
+    };
+}
+export function mapSavedProgress(row) {
+    return {
+        id: row.id,
+        userId: row.user_id,
+        ...(row.source_session_id ? { sourceSessionId: row.source_session_id } : {}),
+        goal: row.goal,
+        focusTime: row.focus_time,
+        completedTasks: row.completed_tasks,
+        totalTasks: row.total_tasks,
+        distractionCount: row.distraction_count,
+        completedTaskTitles: Array.isArray(row.completed_task_titles)
+            ? row.completed_task_titles.map((item) => String(item))
+            : [],
+        distractionEscrow: Array.isArray(row.distraction_escrow)
+            ? row.distraction_escrow.map((item) => String(item))
+            : [],
+        ...(row.context_summary ? { contextSummary: row.context_summary } : {}),
+        savedAt: toIso(row.saved_at),
+        createdAt: toIso(row.created_at),
     };
 }

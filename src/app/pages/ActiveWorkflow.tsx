@@ -27,7 +27,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { BreathingGuideDialog } from "../components/BreathingGuideDialog";
-import { completeServerSession } from "../lib/sessionApi";
+import { WorkflowAssistantChat } from "../components/WorkflowAssistantChat";
+import { useAiSettings } from "../contexts/AiSettingsContext";
+import { completeServerSession, patchServerSession } from "../lib/sessionApi";
 import type { PlannedTask } from "../lib/analyzeApi";
 
 interface Task {
@@ -184,6 +186,7 @@ function picksForContext(goal: string, activeTaskLabel: string | undefined): AiP
 
 export function ActiveWorkflow() {
   const navigate = useNavigate();
+  const { settings } = useAiSettings();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [pendingCompletionIds, setPendingCompletionIds] = useState<string[]>([]);
   const [distractions, setDistractions] = useState<DistractionItem[]>([]);
@@ -207,6 +210,9 @@ export function ActiveWorkflow() {
   const [hasLinkedContext, setHasLinkedContext] = useState(false);
 
   const goal = sessionStorage.getItem("currentGoal") || "Complete your tasks";
+  const serverSessionId = sessionStorage.getItem("serverSessionId") || undefined;
+  const serializeTasksForServer = (rows: Task[]) =>
+    rows.map((task) => `${task.completed ? "[done]" : "[todo]"} ${task.text}`);
 
   useEffect(() => {
     setHasLinkedContext(Boolean(sessionStorage.getItem("analysisContext")?.trim()));
@@ -263,6 +269,36 @@ export function ActiveWorkflow() {
       Object.values(completionTimerRefs.current).forEach((timer) => clearTimeout(timer));
     };
   }, []);
+
+  useEffect(() => {
+    if (!serverSessionId) return;
+
+    const timer = window.setTimeout(() => {
+      void patchServerSession(serverSessionId, {
+        focusTime,
+        completedTasks: tasks.filter((task) => task.completed).length,
+        totalTasks: tasks.length,
+        distractionCount: distractions.length,
+        tasks: serializeTasksForServer(tasks),
+        distractionEscrow: distractions.map((item) => item.text),
+      });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [serverSessionId, tasks, distractions]);
+
+  useEffect(() => {
+    if (!serverSessionId || focusTime <= 0 || focusTime % 25 !== 0) return;
+
+    void patchServerSession(serverSessionId, {
+      focusTime,
+      completedTasks: tasks.filter((task) => task.completed).length,
+      totalTasks: tasks.length,
+      distractionCount: distractions.length,
+      tasks: serializeTasksForServer(tasks),
+      distractionEscrow: distractions.map((item) => item.text),
+    });
+  }, [serverSessionId, focusTime, tasks, distractions]);
 
   const handleTaskCheckChange = (taskId: string, shouldComplete: boolean) => {
     const task = tasks.find((item) => item.id === taskId);
@@ -421,6 +457,7 @@ export function ActiveWorkflow() {
         : "You're in a steady rhythm. We'll surface gentle support if friction shows up—through a distraction capture or a long stretch without movement.";
 
   const handleFinishSession = async () => {
+    const contextSummary = sessionStorage.getItem("analysisContext") || "";
     const payload = {
       focusTime,
       completedTasks: completedCount,
@@ -448,6 +485,7 @@ export function ActiveWorkflow() {
       JSON.stringify({
         ...payload,
         ...(storedServerId ? { serverSessionId: storedServerId } : {}),
+        ...(contextSummary.trim() ? { contextSummary } : {}),
       }),
     );
     navigate("/dashboard");
@@ -958,6 +996,21 @@ export function ActiveWorkflow() {
         </div>
       </div>
       </div>
+      <WorkflowAssistantChat
+        goal={goal}
+        focusTime={focusTime}
+        sessionId={settings?.mode === "default" ? serverSessionId : undefined}
+        distractions={distractions.map((item) => item.text)}
+        tasks={tasks.map((task) => ({
+          id: task.id,
+          text: task.text,
+          completed: task.completed,
+          duration: task.duration,
+          note: task.note,
+          priority: task.priority,
+          isPinned: task.isPinned,
+        }))}
+      />
     </>
   );
 }

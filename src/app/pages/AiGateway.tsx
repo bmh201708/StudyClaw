@@ -251,7 +251,12 @@ export function AiGateway() {
 
                 <div className="h-px bg-[#efe8de]" />
 
-                <AiSettingsFormFields value={form} onChange={setForm} />
+                <AiSettingsFormFields
+                  value={form}
+                  onChange={(next) => {
+                    setForm(next);
+                  }}
+                />
 
                 <div className="flex flex-col gap-4 pt-1">
                   <Button

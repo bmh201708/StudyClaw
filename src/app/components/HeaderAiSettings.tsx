@@ -62,7 +62,11 @@ export function HeaderAiSettings() {
             可切换为服务器默认 API，或继续使用你自己的服务商、模型和密钥。
           </DialogDescription>
         </DialogHeader>
-        <AiSettingsFormFields value={form} onChange={setForm} showApiHint />
+        <AiSettingsFormFields
+          value={form}
+          onChange={setForm}
+          showApiHint
+        />
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <Button type="button" variant="outline" className="rounded-[1.25rem] border-2 border-[#edf1f5]" onClick={handleClearAndReconfigure}>
             清除并重新配置

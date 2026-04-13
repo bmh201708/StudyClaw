@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mapSession, pool } from "./db.js";
-import type { CompleteSessionBody, CreateSessionBody, Session } from "./types.js";
+import { mapSavedProgress, mapSession, pool } from "./db.js";
+import type { CompleteSessionBody, CreateProgressBody, CreateSessionBody, SavedProgress, Session } from "./types.js";
 
 const MAX_COMPLETED = 100;
 
@@ -20,6 +20,22 @@ type SessionRow = {
   created_at: Date | string;
   updated_at: Date | string;
   completed_at: Date | string | null;
+};
+
+type SavedProgressRow = {
+  id: string;
+  user_id: string;
+  source_session_id: string | null;
+  goal: string;
+  focus_time: number;
+  completed_tasks: number;
+  total_tasks: number;
+  distraction_count: number;
+  completed_task_titles: unknown;
+  distraction_escrow: unknown;
+  context_summary: string | null;
+  saved_at: Date | string;
+  created_at: Date | string;
 };
 
 export class SessionStore {
@@ -165,6 +181,95 @@ export class SessionStore {
 
     return result.rows.map(mapSession);
   }
+
+  async getActive(userId: string, preferredId?: string): Promise<Session | undefined> {
+    if (preferredId?.trim()) {
+      const result = await pool.query<SessionRow>(
+        `
+          SELECT *
+          FROM workflow_sessions
+          WHERE id = $1
+            AND user_id = $2
+            AND status = 'active'
+          LIMIT 1
+        `,
+        [preferredId.trim(), userId],
+      );
+      const row = result.rows[0];
+      if (row) return mapSession(row);
+    }
+
+    const result = await pool.query<SessionRow>(
+      `
+        SELECT *
+        FROM workflow_sessions
+        WHERE user_id = $1
+          AND status = 'active'
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `,
+      [userId],
+    );
+
+    const row = result.rows[0];
+    return row ? mapSession(row) : undefined;
+  }
+}
+
+class ProgressStore {
+  async create(userId: string, body: CreateProgressBody): Promise<SavedProgress> {
+    const id = randomUUID();
+    const result = await pool.query<SavedProgressRow>(
+      `
+        INSERT INTO saved_progress (
+          id,
+          user_id,
+          source_session_id,
+          goal,
+          focus_time,
+          completed_tasks,
+          total_tasks,
+          distraction_count,
+          completed_task_titles,
+          distraction_escrow,
+          context_summary
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)
+        RETURNING *
+      `,
+      [
+        id,
+        userId,
+        body.sourceSessionId?.trim() || null,
+        body.goal.trim(),
+        body.focusTime,
+        body.completedTasks,
+        body.totalTasks,
+        body.distractionCount,
+        JSON.stringify(body.completedTaskTitles),
+        JSON.stringify(Array.isArray(body.distractionEscrow) ? body.distractionEscrow : []),
+        body.contextSummary?.trim() || null,
+      ],
+    );
+
+    return mapSavedProgress(result.rows[0]);
+  }
+
+  async listRecent(userId: string, limit: number): Promise<SavedProgress[]> {
+    const result = await pool.query<SavedProgressRow>(
+      `
+        SELECT *
+        FROM saved_progress
+        WHERE user_id = $1
+        ORDER BY saved_at DESC, created_at DESC
+        LIMIT $2
+      `,
+      [userId, Math.min(Math.max(limit, 1), MAX_COMPLETED)],
+    );
+
+    return result.rows.map(mapSavedProgress);
+  }
 }
 
 export const store = new SessionStore();
+export const progressStore = new ProgressStore();
