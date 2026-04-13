@@ -21,6 +21,15 @@ npm run dev:full
 
 根目录 `vite` 已将 `/api` 代理到 `3001`。
 
+## Docker 部署
+
+```bash
+cp .env.example .env
+docker compose up -d --build api
+```
+
+默认会绑定到 `127.0.0.1:38101`，避免直接暴露到公网。
+
 ## 接口一览
 
 | 方法 | 路径 | 说明 |

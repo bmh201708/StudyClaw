@@ -4,9 +4,11 @@ import { analyzeRouter } from "./routes/analyze.js";
 import { sessionsRouter } from "./routes/sessions.js";
 
 const app = express();
+const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT) || 3001;
+const corsOrigin = process.env.CORS_ORIGIN?.trim();
 
-app.use(cors({ origin: true }));
+app.use(cors({ origin: corsOrigin || true }));
 app.use(express.json({ limit: "512kb" }));
 
 app.get("/health", (_req, res) => {
@@ -20,8 +22,8 @@ app.use((_req, res) => {
   res.status(404).json({ error: "not found" });
 });
 
-app.listen(PORT, "127.0.0.1", () => {
+app.listen(PORT, HOST, () => {
   console.log(
-    `[studyclaw-api] http://127.0.0.1:${PORT}  (/health, /api/analyze, /api/sessions)`,
+    `[studyclaw-api] http://${HOST}:${PORT}  (/health, /api/analyze, /api/sessions)`,
   );
 });
