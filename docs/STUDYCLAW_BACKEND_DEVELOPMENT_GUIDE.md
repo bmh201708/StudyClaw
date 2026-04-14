@@ -1,36 +1,40 @@
 # StudyClaw 后端开发指南
 
-本文档描述 StudyClaw 当前后端的实际落地状态，包括：
+本文档描述 StudyClaw 当前后端的实际落地状态。内容基于仓库中的当前代码，以及已经部署到腾讯云服务器上的运行方式整理。
 
-- 后端架构
-- 技术栈
-- 代码目录
-- 数据模型
+覆盖范围：
+
+- 当前后端架构
+- 主要技术栈
+- 代码目录与关键文件职责
+- 数据库表结构
 - API 端点
-- Docker 与服务器部署
-- 腾讯云服务器上的实际位置和容器
+- AI 服务层设计
+- Docker 与腾讯云部署信息
 - 日常开发、发布、排障方式
 
-本文档基于当前仓库代码和已上线的腾讯云环境整理。
-
-## 1. 概览
+## 1. 总览
 
 StudyClaw 当前后端是一个 **Docker 化的模块化单体服务**。
 
-核心职责有三类：
+它现在承担 6 类核心职责：
 
-- 用户注册、登录、登录态校验
-- 专注会话的创建、更新、完成、查询
-- 任务设置阶段的附件分析与默认 LLM 任务生成
+- 用户注册、登录、退出、登录态校验
+- 用户资料、密码、偏好、AI 偏好管理
+- 自定义 API 配置的服务端加密存储
+- 专注会话创建、更新、完成、查询
+- Progress 快照保存与读取
+- 附件分析、默认 AI 任务生成、Workflow 聊天助手
 
-当前后端不是微服务架构，也没有独立 worker。所有业务逻辑都在一个 `Express` API 进程里完成。
+当前不是微服务，也没有单独 worker。所有业务逻辑都在一个 `Express` API 进程里完成，数据库使用 `PostgreSQL`。
 
-当前生产部署为两容器：
+当前生产部署的 StudyClaw 容器有：
 
 - `studyclaw-api`
 - `studyclaw-postgres-1`
+- `studyclaw-frontend`
 
-`redis` 只在 `docker-compose.yml` 里预留了 profile，没有进入当前生产主链。
+此外服务器上还有其他项目容器，如 `hush-backend`、`rp-api`、`rp-nginx`、`rp-postgres`、`rp-redis`，它们**不属于 StudyClaw**，部署和排障时不要误操作。
 
 ## 2. 当前架构
 
@@ -39,39 +43,60 @@ StudyClaw 当前后端是一个 **Docker 化的模块化单体服务**。
 当前实现可以理解为：
 
 - HTTP 层：`Express`
-- 路由层：`auth / analyze / sessions`
-- 业务层：分散在 `auth.ts`、`store.ts`、`planWithDefaultLlm.ts`
+- 路由层：`auth / account / analyze / chat / progress / sessions`
+- 服务层：
+  - 认证：`auth.ts`
+  - 账户与偏好：`account.ts`
+  - 会话与 progress 持久化：`store.ts`
+  - 默认 AI 服务层：`src/ai/*`
 - 数据层：`pg` 直连 PostgreSQL
 - 文件处理：内存上传 + 同步文本抽取
-- AI 调用：同步请求 OpenAI-compatible 接口
+- AI 调用：同步请求 OpenAI-compatible `chat/completions`
 
 ### 2.2 请求流
 
-#### 注册/登录
+#### 注册 / 登录
 
-1. 前端调用 `/api/auth/register` 或 `/api/auth/login`
+1. 前端请求 `/api/auth/register` 或 `/api/auth/login`
 2. 后端写入或读取 `app_users`
-3. 后端生成随机 token
+3. 后端生成随机 bearer token
 4. token 的 SHA-256 摘要写入 `auth_tokens`
 5. 原始 token 返回给前端
-6. 前端把 token 保存在浏览器本地存储
+6. 前端将 token 保存在浏览器本地存储
+
+#### 用户偏好 / AI 偏好
+
+1. 前端登录后拉取 `/api/account/preferences` 或 `/api/account/ai-preferences`
+2. 后端按用户读取 `user_preferences`、`user_ai_preferences`
+3. 若偏好行不存在，会自动补默认值
+4. 自定义 API key 只会以**密文**形式存入数据库，接口只返回掩码
 
 #### 专注会话
 
-1. 前端在 Task Setup 或 Workflow 阶段请求 `/api/sessions`
-2. 后端从 `Authorization: Bearer <token>` 中识别用户
-3. 会话写入 `workflow_sessions`
-4. 后续 `PATCH /api/sessions/:id` 增量更新
-5. `POST /api/sessions/:id/complete` 结束会话并标记 `completed`
+1. 前端在 Task Setup 创建 `/api/sessions`
+2. 后端识别用户并写入 `workflow_sessions`
+3. Workflow 阶段持续 `PATCH /api/sessions/:id`
+4. 完成后调用 `POST /api/sessions/:id/complete`
+5. Dashboard 可继续调用 `/api/progress` 保存快照
 
-#### 附件分析与 AI 任务生成
+#### 附件分析与默认 AI 任务生成
 
-1. 前端上传目标和附件到 `/api/analyze`
-2. 后端用 `multer` 读入内存
-3. 文本型附件同步抽取正文
-4. 所有内容合并成 `contextForAI`
-5. 使用默认模型配置调用 `LLM_BASE_URL/chat/completions`
-6. 解析模型 JSON 输出并返回 `ai.tasks`
+1. 前端上传目标和附件到 `POST /api/analyze`
+2. 后端使用 `multer` 以内存方式接收文件
+3. 后端抽取文本并拼接 `contextForAI`
+4. `generateStudyPlan(...)` 通过统一 AI 服务层调用默认模型
+5. 返回兼容前端的 `ai.status / ai.message / ai.tasks / ai.summary`
+
+#### Workflow 聊天助手
+
+1. 前端调用 `POST /api/chat/workflow-assistant`
+2. 后端从请求体拿到 workflow live snapshot
+3. 统一 AI 服务层构造 prompt 和工具集合
+4. 模型可通过 tool calling 获取：
+   - 当前用户资料
+   - 当前学习上下文和活跃 session
+   - 最近 3 条 saved progress
+5. 工具结果回填给模型，再生成最终聊天回复
 
 ## 3. 技术栈
 
@@ -84,17 +109,18 @@ StudyClaw 当前后端是一个 **Docker 化的模块化单体服务**。
 ### 3.2 数据库
 
 - PostgreSQL 16
-- `pg` 驱动
+- `pg`
 
 ### 3.3 鉴权与安全
 
 - `bcryptjs`：密码哈希
 - Bearer Token：当前登录态方案
-- Token 在数据库中只存 SHA-256 摘要，不直接存明文
+- `crypto`（Node 内置）：token hash、对称加密辅助
+- 自定义 API key：服务端 AES-GCM 风格对称加密存储
 
 ### 3.4 附件处理
 
-- `multer`：上传解析
+- `multer`：文件上传
 - `pdf-parse`：PDF 文本抽取
 - `mammoth`：DOCX 文本抽取
 
@@ -106,7 +132,7 @@ StudyClaw 当前后端是一个 **Docker 化的模块化单体服务**。
 ### 3.6 AI 接入
 
 - OpenAI-compatible Chat Completions
-- 环境变量：
+- 默认模型配置环境变量：
   - `LLM_PROVIDER`
   - `LLM_BASE_URL`
   - `LLM_API_KEY`
@@ -114,9 +140,9 @@ StudyClaw 当前后端是一个 **Docker 化的模块化单体服务**。
 
 ## 4. 代码目录
 
-当前后端代码位于仓库内的 [server](/Users/jimjimu/Documents/GitHub/StudyClaw/server)。
+后端代码位于 [server](/Users/jimjimu/Documents/GitHub/StudyClaw/server)。
 
-主要结构如下：
+当前主要结构：
 
 ```text
 server/
@@ -124,13 +150,26 @@ server/
 │   ├── index.ts
 │   ├── db.ts
 │   ├── auth.ts
+│   ├── account.ts
+│   ├── crypto.ts
+│   ├── extractFileText.ts
 │   ├── store.ts
 │   ├── types.ts
-│   ├── extractFileText.ts
-│   ├── planWithDefaultLlm.ts
+│   ├── ai/
+│   │   ├── client.ts
+│   │   ├── config.ts
+│   │   ├── errors.ts
+│   │   ├── parsers.ts
+│   │   ├── prompts.ts
+│   │   ├── service.ts
+│   │   ├── tools.ts
+│   │   └── types.ts
 │   └── routes/
-│       ├── auth.ts
+│       ├── account.ts
 │       ├── analyze.ts
+│       ├── auth.ts
+│       ├── chat.ts
+│       ├── progress.ts
 │       └── sessions.ts
 ├── Dockerfile
 ├── docker-compose.yml
@@ -143,9 +182,9 @@ server/
 ### 4.1 关键文件说明
 
 - [server/src/index.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/index.ts)
-  - 服务入口
-  - 装配 CORS、JSON 解析、路由
-  - 启动时执行 `initDb()`
+  - API 入口
+  - 初始化 DB
+  - 挂载所有路由
 
 - [server/src/db.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/db.ts)
   - PostgreSQL 连接池
@@ -153,32 +192,46 @@ server/
   - 数据库行到领域对象的映射
 
 - [server/src/auth.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/auth.ts)
-  - 密码哈希
-  - token 生成与校验
+  - 注册、登录、token 管理
   - `requireUser()` 鉴权入口
 
+- [server/src/account.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/account.ts)
+  - 用户资料更新
+  - 修改密码
+  - 用户偏好读写
+  - AI 偏好读写
+  - 用户统计聚合查询
+
+- [server/src/crypto.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/crypto.ts)
+  - 自定义 API key 加密
+  - 掩码生成
+
 - [server/src/store.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/store.ts)
-  - 会话的数据库读写
-  - 当前虽然文件名叫 `store`，但实际已经是 Postgres repository
+  - `workflow_sessions` 和 `saved_progress` 的数据库读写
 
-- [server/src/routes/auth.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/auth.ts)
-  - 注册、登录、获取当前用户、退出登录
+- [server/src/extractFileText.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/extractFileText.ts)
+  - 附件文本抽取
 
-- [server/src/routes/sessions.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/sessions.ts)
-  - 专注会话相关接口
+- [server/src/ai/service.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/ai/service.ts)
+  - 对外提供两个用例：
+    - `generateStudyPlan(...)`
+    - `runWorkflowAssistant(...)`
 
-- [server/src/routes/analyze.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/analyze.ts)
-  - 附件上传
-  - 文本抽取
-  - 默认 AI 任务生成
+- [server/src/ai/tools.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/ai/tools.ts)
+  - Workflow Assistant 的 tool registry
 
-- [server/src/planWithDefaultLlm.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/planWithDefaultLlm.ts)
-  - 默认模型调用
-  - AI 结果 JSON 解析与归一化
+- [server/src/routes/account.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/account.ts)
+  - 个人中心相关接口
+
+- [server/src/routes/progress.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/progress.ts)
+  - Progress 保存与读取
+
+- [server/src/routes/chat.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/chat.ts)
+  - Workflow 聊天助手入口
 
 ## 5. 数据库设计
 
-当前数据库初始化逻辑在 [server/src/db.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/db.ts)。
+数据库初始化逻辑在 [server/src/db.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/db.ts)。
 
 ### 5.1 `app_users`
 
@@ -208,8 +261,8 @@ server/
 说明：
 
 - 返回给前端的是明文 token
-- 数据库里只保存 `token_hash`
-- 每次 `/api/auth/me` 或需要鉴权的接口访问时会刷新 `last_used_at`
+- 数据库里只保存 token 的 SHA-256 摘要
+- 退出登录时会撤销 token
 
 ### 5.3 `workflow_sessions`
 
@@ -233,7 +286,65 @@ server/
 - `updated_at TIMESTAMPTZ NOT NULL`
 - `completed_at TIMESTAMPTZ`
 
-当前没有拆分任务子表，`tasks` 和 `distraction_escrow` 直接以 JSONB 数组存储。
+说明：
+
+- 当前没有任务子表，任务快照直接落 JSONB
+- `PATCH /api/sessions/:id` 会持续更新这些统计字段
+
+### 5.4 `saved_progress`
+
+用途：用户主动保存的 progress 快照
+
+字段：
+
+- `id TEXT PRIMARY KEY`
+- `user_id TEXT NOT NULL`
+- `source_session_id TEXT NULL`
+- `goal TEXT NOT NULL`
+- `focus_time INTEGER NOT NULL`
+- `completed_tasks INTEGER NOT NULL`
+- `total_tasks INTEGER NOT NULL`
+- `distraction_count INTEGER NOT NULL`
+- `completed_task_titles JSONB NOT NULL`
+- `distraction_escrow JSONB NOT NULL`
+- `context_summary TEXT`
+- `saved_at TIMESTAMPTZ NOT NULL`
+- `created_at TIMESTAMPTZ NOT NULL`
+
+### 5.5 `user_preferences`
+
+用途：用户基础偏好
+
+字段：
+
+- `user_id TEXT PRIMARY KEY`
+- `default_workflow_mode TEXT NOT NULL`
+- `focus_reminder_enabled BOOLEAN NOT NULL`
+- `break_reminder_enabled BOOLEAN NOT NULL`
+- `theme_variant TEXT NOT NULL`
+- `ui_density TEXT NOT NULL`
+- `updated_at TIMESTAMPTZ NOT NULL`
+
+### 5.6 `user_ai_preferences`
+
+用途：用户 AI 偏好与自定义 API 配置
+
+字段：
+
+- `user_id TEXT PRIMARY KEY`
+- `mode TEXT NOT NULL`
+- `provider TEXT NOT NULL`
+- `model TEXT NOT NULL`
+- `base_url TEXT NOT NULL`
+- `custom_api_key_encrypted TEXT NULL`
+- `custom_api_key_masked TEXT NULL`
+- `updated_at TIMESTAMPTZ NOT NULL`
+
+说明：
+
+- 明文 API key **不会**存数据库
+- 接口只会返回 `hasCustomApiKey` 和 `customApiKeyMasked`
+- 当前是一用户一套 AI 偏好，不支持多套配置切换
 
 ## 6. API 端点
 
@@ -249,7 +360,7 @@ server/
 {
   "ok": true,
   "service": "studyclaw-api",
-  "ts": "2026-04-13T09:20:10.493Z"
+  "ts": "2026-04-13T15:03:31.513Z"
 }
 ```
 
@@ -290,343 +401,420 @@ server/
 - `email` 必须符合格式
 - `password` 至少 8 个字符
 
-失败情况：
-
-- 重复邮箱：`409`
-- 参数不合法：`400`
-
 #### `POST /api/auth/login`
 
 用途：登录
-
-请求体：
-
-```json
-{
-  "email": "alice@example.com",
-  "password": "StudyClaw123"
-}
-```
-
-成功响应结构同注册。
 
 #### `GET /api/auth/me`
 
 用途：获取当前用户
 
-请求头：
-
-```http
-Authorization: Bearer <token>
-```
+需 `Authorization: Bearer <token>`
 
 #### `POST /api/auth/logout`
 
-用途：删除当前 token
+用途：退出登录并撤销当前 token
 
-说明：
+### 6.3 账户接口
 
-- 当前是单 token 粒度退出
-- 不会批量踢掉该用户所有 token
+所有 `/api/account/*` 都需要登录。
 
-### 6.3 会话接口
+#### `PATCH /api/account/profile`
 
-以下接口都需要：
-
-```http
-Authorization: Bearer <token>
-```
-
-#### `POST /api/sessions`
-
-用途：创建专注会话
+用途：修改昵称
 
 请求体：
 
 ```json
 {
-  "goal": "Write backend guide",
+  "name": "Radiant Fox"
+}
+```
+
+#### `POST /api/account/change-password`
+
+用途：修改密码
+
+请求体：
+
+```json
+{
+  "currentPassword": "old-password",
+  "nextPassword": "new-password"
+}
+```
+
+#### `GET /api/account/preferences`
+
+用途：一次性返回基础偏好 + AI 偏好
+
+响应结构：
+
+```json
+{
+  "preferences": {
+    "userId": "<user-id>",
+    "defaultWorkflowMode": "digital",
+    "focusReminderEnabled": true,
+    "breakReminderEnabled": true,
+    "themeVariant": "radiant",
+    "uiDensity": "comfortable",
+    "updatedAt": "2026-04-13T15:03:59.601Z"
+  },
+  "aiPreferences": {
+    "userId": "<user-id>",
+    "mode": "default",
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "baseUrl": "https://api.openai.com/v1",
+    "hasCustomApiKey": false,
+    "updatedAt": "2026-04-13T15:03:59.709Z"
+  }
+}
+```
+
+#### `PUT /api/account/preferences`
+
+用途：保存基础偏好
+
+可更新字段：
+
+- `defaultWorkflowMode`
+- `focusReminderEnabled`
+- `breakReminderEnabled`
+- `themeVariant`
+- `uiDensity`
+
+#### `GET /api/account/ai-preferences`
+
+用途：单独读取 AI 偏好
+
+#### `PUT /api/account/ai-preferences`
+
+用途：保存 AI 偏好
+
+支持两种模式：
+
+- `mode = "default"`
+- `mode = "custom"`
+
+自定义模式可提交：
+
+- `provider`
+- `model`
+- `baseUrl`
+- `customApiKey`
+
+说明：
+
+- `customApiKey` 仅在更新时提交
+- 读取时不会回传明文
+- `openai-compatible` 的自定义模式要求显式 `baseUrl`
+
+#### `GET /api/account/stats`
+
+用途：个人中心统计页聚合数据
+
+返回字段：
+
+- `totalFocusTime`
+- `completedSessions`
+- `savedProgressCount`
+- `last7Days`
+- `recentSessions`
+
+### 6.4 会话接口
+
+所有 `/api/sessions/*` 都需要登录。
+
+#### `POST /api/sessions`
+
+用途：创建活跃会话
+
+请求体：
+
+```json
+{
+  "goal": "Finish chapter summary",
   "mode": "digital",
-  "contextSummary": "Optional combined setup context"
-}
-```
-
-#### `GET /api/sessions/:id`
-
-用途：查询单条会话
-
-#### `PATCH /api/sessions/:id`
-
-用途：同步会话过程数据
-
-请求体示例：
-
-```json
-{
-  "focusTime": 900,
-  "completedTasks": 1,
-  "totalTasks": 3,
-  "distractionCount": 1,
-  "tasks": ["Task A"],
-  "distractionEscrow": ["Check messages later"]
-}
-```
-
-#### `POST /api/sessions/:id/complete`
-
-用途：结束会话
-
-请求体示例：
-
-```json
-{
-  "focusTime": 1500,
-  "completedTasks": 3,
-  "totalTasks": 3,
-  "distractionCount": 1,
-  "tasks": ["Task A", "Task B", "Task C"],
-  "distractionEscrow": ["Check messages later"]
+  "contextSummary": "Optional AI context"
 }
 ```
 
 #### `GET /api/sessions?status=completed&limit=20`
 
-用途：列出当前用户最近完成的会话
+用途：查询最近完成的 session
 
-说明：
+#### `GET /api/sessions/:id`
 
-- 当前只支持 `status=completed`
-- `limit` 最大 50
+用途：读取单条 session
 
-### 6.4 分析与 AI 规划接口
+#### `PATCH /api/sessions/:id`
+
+用途：更新进行中的 session
+
+可更新字段：
+
+- `focusTime`
+- `completedTasks`
+- `totalTasks`
+- `distractionCount`
+- `tasks`
+- `distractionEscrow`
+
+#### `POST /api/sessions/:id/complete`
+
+用途：完成 session
+
+### 6.5 Progress 接口
+
+所有 `/api/progress/*` 都需要登录。
+
+#### `POST /api/progress`
+
+用途：保存 Dashboard 上的 progress 快照
+
+请求体核心字段：
+
+- `goal`
+- `focusTime`
+- `completedTasks`
+- `totalTasks`
+- `distractionCount`
+- `completedTaskTitles`
+- `distractionEscrow`
+- `sourceSessionId`
+- `contextSummary`
+
+#### `GET /api/progress?limit=3`
+
+用途：读取最近保存的 progress
+
+### 6.6 附件分析与任务生成
 
 #### `POST /api/analyze`
 
 用途：
 
-- 接收目标和附件
+- 接收 Task Setup 的目标与附件
 - 抽取文本
-- 调用默认模型生成任务计划
+- 拼接 `contextForAI`
+- 调用默认 AI 生成任务计划
 
-请求格式：`multipart/form-data`
+支持附件：
 
-字段：
+- `txt`
+- `md`
+- `pdf`
+- `docx`
+- `doc`
+- `jpg/png/gif/webp`
 
-- `goal`
-- `attachments`，可多文件
+限制：
 
-当前限制：
+- 单文件最大 `5 MiB`
+- 最多 `10` 个附件
 
-- 最多 10 个文件
-- 单文件最大 5 MiB
-- 支持：
-  - `txt`
-  - `md`
-  - `pdf`
-  - `docx`
-  - `doc`
-  - `jpg/jpeg`
-  - `png`
-  - `gif`
-  - `webp`
-
-返回内容包括：
+响应中包含：
 
 - `goal`
 - `contextForAI`
 - `attachments`
 - `limits`
-- `ai.status`
-- `ai.message`
-- `ai.model`
-- `ai.summary`
-- `ai.tasks`
+- `ai`
 
-注意：
+### 6.7 Workflow 聊天助手
 
-- 当前后端 **没有强制要求** `/api/analyze` 登录后访问
-- 当前前端会在有 token 时自动带上 `Authorization`
-- 如果未来要收紧权限，应该在该路由也接 `requireUser()`
+#### `POST /api/chat/workflow-assistant`
 
-## 7. 环境变量
+用途：在 Workflow 页面中与默认 AI 聊天
 
-样例文件在 [server/.env.example](/Users/jimjimu/Documents/GitHub/StudyClaw/server/.env.example)。
+请求体核心字段：
 
-### 7.1 通用
-
-- `NODE_ENV`
-- `HOST`
-- `PORT`
-- `CORS_ORIGIN`
-
-### 7.2 宿主机端口绑定
-
-- `API_BIND_IP`
-- `API_PORT`
-- `POSTGRES_BIND_IP`
-- `POSTGRES_PORT`
-- `REDIS_BIND_IP`
-- `REDIS_PORT`
-
-当前生产约定：
-
-- API 仅绑定 `127.0.0.1:38101`
-- Postgres 仅绑定 `127.0.0.1:55432`
-
-### 7.3 数据库
-
-- `DATABASE_URL`
-
-当前 compose 内部默认形态：
-
-```bash
-DATABASE_URL=postgresql://studyclaw:change-me@postgres:5432/studyclaw
-```
-
-### 7.4 认证
-
-- `AUTH_TOKEN_TTL_DAYS`
-
-当前默认值：`30`
-
-### 7.5 默认 AI
-
-- `LLM_PROVIDER`
-- `LLM_MODEL`
-- `LLM_BASE_URL`
-- `LLM_API_KEY`
-
-当前仅支持：
-
-- `LLM_PROVIDER=openai-compatible`
-
-## 8. Docker 与容器
-
-Compose 文件在 [server/docker-compose.yml](/Users/jimjimu/Documents/GitHub/StudyClaw/server/docker-compose.yml)。
-
-### 8.1 当前主容器
-
-- `studyclaw-api`
-  - Node.js API 容器
-  - 对外仅绑定 `127.0.0.1:38101`
-
-- `studyclaw-postgres-1`
-  - PostgreSQL 容器
-  - 对外仅绑定 `127.0.0.1:55432`
-
-### 8.2 预留容器
-
-- `redis`
-  - 只有在 `infra` profile 下才会启动
-  - 当前生产没有使用
-
-### 8.3 健康检查
-
-- API 容器通过 `fetch('http://127.0.0.1:3001/health')` 探活
-- Postgres 容器通过 `pg_isready` 探活
-
-## 9. 腾讯云服务器实际部署
-
-### 9.1 服务器信息
-
-当前线上部署在腾讯云主机：
-
-- Host: `111.229.204.242`
-- SSH 用户：`root`
-- SSH 端口：`22`
+- `sessionId`
+- `goal`
+- `focusTime`
+- `tasks`
+- `distractions`
+- `messages`
 
 说明：
 
-- 密码或任何密钥不要写进仓库文档
-- 连接凭证单独保管
+- 该接口只走默认 AI，不走用户自定义 API 直连
+- 内部会使用 tool calling
+- 若默认 AI 未配置完整，会返回 `503`
 
-### 9.2 线上目录
+## 7. AI 服务层
 
-当前 StudyClaw 后端代码部署目录：
+当前默认 AI 已经收口到 [server/src/ai](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/ai)。
 
-- `/opt/studyclaw-backend`
+### 7.1 结构
 
-当前环境变量文件：
+- `config.ts`
+  - 统一读取 `LLM_*`
+  - 校验 provider 是否支持
 
-- `/opt/studyclaw-backend/.env`
+- `client.ts`
+  - 统一请求 OpenAI-compatible `chat/completions`
+  - 处理超时、上游错误、响应读取
 
-备份目录：
+- `prompts.ts`
+  - 任务规划 prompt
+  - Workflow assistant prompt
 
-- `/opt/backups`
+- `parsers.ts`
+  - assistant 文本提取
+  - 任务 JSON 解析
+  - tool call 提取
 
-### 9.3 线上容器
+- `tools.ts`
+  - Workflow assistant 的工具注册表
 
-截至当前整理，服务器上有这些容器：
+- `service.ts`
+  - `generateStudyPlan(...)`
+  - `runWorkflowAssistant(...)`
 
-- `studyclaw-api`
-- `studyclaw-postgres-1`
-- `hush-backend`
-- `rp-api`
-- `rp-nginx`
-- `rp-postgres`
-- `rp-redis`
+- `errors.ts`
+  - AI 层统一错误模型
 
-其中 StudyClaw 相关只有：
+### 7.2 当前支持的工具
 
-- `studyclaw-api`
-- `studyclaw-postgres-1`
+- `get_current_user_profile`
+- `get_current_learning_context`
+- `get_recent_saved_progress`
 
-其它容器属于别的项目，**不要动**。
+### 7.3 当前错误分类
 
-### 9.4 线上入口
+- `AI_CONFIG_ERROR`
+- `AI_PROVIDER_UNSUPPORTED`
+- `AI_UPSTREAM_ERROR`
+- `AI_TIMEOUT_ERROR`
+- `AI_PARSE_ERROR`
+- `AI_TOOL_ERROR`
 
-内部 API：
+HTTP 映射原则：
 
-- `http://127.0.0.1:38101`
+- 配置缺失 / provider 不支持：`503`
+- 上游失败 / 超时：`503`
+- 解析失败 / 工具轮次耗尽：`502`
 
-外部经现有 nginx 转发后的入口：
+## 8. 环境变量
 
-- `http://111.229.204.242/studyclaw-api`
+参考模板：[server/.env.example](/Users/jimjimu/Documents/GitHub/StudyClaw/server/.env.example)
 
-健康检查地址：
-
-- `http://111.229.204.242/studyclaw-api/health`
-
-注意：
-
-- 当前是 HTTP，不是 HTTPS
-- 如果要给 Vercel 等 HTTPS 前端正式接入，后续应补域名和证书
-
-## 10. 日常开发方式
-
-## 10.1 本地开发
-
-后端目录：
+核心变量：
 
 ```bash
-cd server
+NODE_ENV=production
+HOST=0.0.0.0
+PORT=3001
+CORS_ORIGIN=
+
+API_BIND_IP=127.0.0.1
+API_PORT=38101
+
+DATABASE_URL=postgresql://studyclaw:change-me@postgres:5432/studyclaw
+REDIS_URL=redis://redis:6379
+AUTH_TOKEN_TTL_DAYS=30
+
+USER_SECRET_ENCRYPTION_KEY=replace-with-a-long-random-secret
+
+LLM_PROVIDER=openai-compatible
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=
+LLM_API_KEY=
+```
+
+说明：
+
+- `DATABASE_URL` 必填，否则服务启动直接失败
+- `USER_SECRET_ENCRYPTION_KEY` 用于自定义 API key 加密
+- `LLM_BASE_URL / LLM_API_KEY / LLM_MODEL` 不完整时，默认 AI 功能会返回禁用或 `503`
+
+## 9. Docker 与部署
+
+### 9.1 本地容器化启动
+
+```bash
+cd /Users/jimjimu/Documents/GitHub/StudyClaw/server
 cp .env.example .env
 docker compose up -d --build
 ```
 
-本地 API：
+默认行为：
 
-- `http://127.0.0.1:38101`
+- 启动 `api`
+- 启动 `postgres`
+- `redis` 只是预留 profile，默认不启动
 
-如果只跑 Node 开发模式：
+### 9.2 腾讯云服务器上的实际位置
+
+当前服务器信息：
+
+- Host: `111.229.204.242`
+- User: `root`
+- Port: `22`
+
+StudyClaw 相关目录：
+
+- 后端目录：`/opt/studyclaw-backend`
+- 前端目录：`/opt/studyclaw-frontend`
+- 备份目录：`/opt/backups`
+
+后端环境变量文件：
+
+- `/opt/studyclaw-backend/.env`
+
+### 9.3 当前容器与端口
+
+StudyClaw 当前使用：
+
+- `studyclaw-api`
+  - 容器内端口：`3001`
+  - Host 绑定：`127.0.0.1:38101 -> 3001`
+- `studyclaw-postgres-1`
+  - 容器内端口：`5432`
+  - Host 绑定：`127.0.0.1:55432 -> 5432`
+- `studyclaw-frontend`
+  - 容器内端口：`80`
+  - Host 绑定：`127.0.0.1:38180 -> 80`
+
+公网入口通过宿主机 nginx 暴露：
+
+- 前端：`http://111.229.204.242/studyclaw/`
+- 后端：`http://111.229.204.242/studyclaw-api/`
+
+## 10. 日常开发与发布
+
+### 10.1 本地开发
+
+后端单独启动：
 
 ```bash
-cd server
+cd /Users/jimjimu/Documents/GitHub/StudyClaw/server
 npm install
 npm run dev
 ```
 
-### 10.2 以后直接在云服务器开发
+与前端联调：
 
-既然当前约定是“后端以后直接在云服务器上写”，建议把 **服务器上的 `/opt/studyclaw-backend` 视为后端运行源目录**。
+```bash
+cd /Users/jimjimu/Documents/GitHub/StudyClaw
+npm run dev:full
+```
 
-常用流程：
+### 10.2 构建检查
 
-1. SSH 登录服务器
-2. 进入 `/opt/studyclaw-backend`
-3. 修改代码
-4. 执行 `docker compose -p studyclaw up -d --build`
-5. 用 `curl` 或日志验证
+后端构建：
+
+```bash
+cd /Users/jimjimu/Documents/GitHub/StudyClaw/server
+npm run build
+```
+
+### 10.3 服务器上直接改后端
+
+当前后端的实际维护方式是：**直接在腾讯云服务器的 `/opt/studyclaw-backend` 上编辑和重建容器**。
 
 常用命令：
 
@@ -634,78 +822,87 @@ npm run dev
 cd /opt/studyclaw-backend
 docker compose -p studyclaw ps
 docker compose -p studyclaw logs -f api
-docker compose -p studyclaw logs -f postgres
 docker compose -p studyclaw up -d --build
 docker compose -p studyclaw down
 ```
 
-### 10.3 查看数据库
+### 10.4 前端发布
+
+前端使用仓库根目录脚本：
 
 ```bash
-docker exec -it studyclaw-postgres-1 psql -U studyclaw -d studyclaw
+cd /Users/jimjimu/Documents/GitHub/StudyClaw
+./scripts/deploy-frontend.sh
 ```
 
-常见 SQL：
+### 10.5 后端发布
 
-```sql
-select * from app_users order by created_at desc limit 20;
-select * from workflow_sessions order by created_at desc limit 20;
-select * from auth_tokens order by created_at desc limit 20;
-```
+当前没有固定的一键后端脚本纳入仓库主流程。若需要从本地同步后端到服务器，通常做法是：
 
-## 11. 发布流程
+1. 打包 `server/`
+2. 上传到 `/opt/studyclaw-backend`
+3. 保留远端 `.env`
+4. 执行 `docker compose -p studyclaw up -d --build`
 
-当前推荐发布步骤：
+## 11. 排障建议
 
-1. 备份 `/opt/studyclaw-backend`
-2. 替换源码，但保留 `.env`
-3. 执行 `docker compose -p studyclaw up -d --build`
-4. 检查 `docker compose -p studyclaw ps`
-5. 验证：
-   - `/health`
-   - `/api/auth/register` 或 `/api/auth/login`
-   - `/api/sessions`
-
-如果你要手动备份：
+### 11.1 容器状态
 
 ```bash
-TS=$(date +%Y%m%d-%H%M%S)
-mkdir -p /opt/backups
-tar -C /opt -czf /opt/backups/studyclaw-backend-$TS.tgz studyclaw-backend
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 ```
 
-## 12. 已知限制
+### 11.2 后端日志
 
-- 当前没有 `Prisma`/`Drizzle`，SQL 是手写的
-- 当前没有 migration 体系，表结构靠 `initDb()` 启动时自动创建
-- 当前认证是简单 Bearer Token，不是 JWT
-- 当前没有 refresh token 机制
-- 当前 `/api/analyze` 仍是同步执行，耗时会占用请求
-- 当前图片附件只做登记，不做视觉识别
-- 当前没有任务子表，任务列表直接写 JSONB
-- 当前没有审计日志、限流、密码重置、邮箱验证
-- 当前公网入口还是 HTTP
+```bash
+cd /opt/studyclaw-backend
+docker compose -p studyclaw logs -f api
+```
 
-## 13. 建议的下一步演进
+### 11.3 数据库连接检查
 
-优先级建议如下：
+```bash
+cd /opt/studyclaw-backend
+docker compose -p studyclaw exec postgres pg_isready -U studyclaw -d studyclaw
+```
 
-1. 给 `/api/analyze` 增加鉴权校验
-2. 把数据库初始化迁移为正式 migration 机制
-3. 把 `workflow_sessions.tasks` 从 JSONB 拆成任务子表
-4. 引入 `redis + worker`，把附件分析和 AI 生成异步化
-5. 增加 HTTPS 域名入口
-6. 增加用户资料、密码重置、邮箱验证
+### 11.4 健康检查
 
-## 14. 快速定位
+```bash
+curl http://127.0.0.1:38101/health
+curl http://111.229.204.242/studyclaw-api/health
+```
 
-如果要快速找问题，优先看这些文件：
+### 11.5 常见问题
 
-- 服务启动与路由： [server/src/index.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/index.ts)
-- 数据库初始化： [server/src/db.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/db.ts)
-- 认证： [server/src/auth.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/auth.ts)
-- 登录接口： [server/src/routes/auth.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/auth.ts)
-- 会话接口： [server/src/routes/sessions.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/sessions.ts)
-- AI 任务生成： [server/src/routes/analyze.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/routes/analyze.ts)
-- 默认模型调用： [server/src/planWithDefaultLlm.ts](/Users/jimjimu/Documents/GitHub/StudyClaw/server/src/planWithDefaultLlm.ts)
+- `DATABASE_URL is required`
+  - `.env` 缺失或未加载
 
+- 默认 AI 返回 `503`
+  - `LLM_BASE_URL / LLM_API_KEY / LLM_MODEL` 未配置完整
+
+- 自定义 API 偏好保存失败
+  - `USER_SECRET_ENCRYPTION_KEY` 未配置
+  - 或自定义模式缺少 `customApiKey`
+  - 或 `openai-compatible` 模式缺少 `baseUrl`
+
+- 前端请求 `401`
+  - 浏览器本地 token 已过期或被清除
+
+## 12. 当前限制与后续方向
+
+当前已完成从“原型后端”向“可持久化后端”的升级，但仍有明显边界：
+
+- 图片附件尚未接视觉模型
+- 没有 Redis 队列和异步 worker
+- 没有邮箱验证、密码重置等正式账号能力
+- 没有更细粒度的 session 事件流
+- AI 调用缺少限流、重试和更完整的可观测性
+- 当前仍是单体进程，同步处理附件抽取和 AI 请求
+
+下一阶段优先建议：
+
+- AI 调用日志、超时、重试、限流
+- session / progress 更细粒度历史
+- 异步化附件分析与 AI 任务生成
+- 更完整的账户安全能力
