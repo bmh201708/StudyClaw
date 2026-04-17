@@ -18,6 +18,7 @@ import {
   Save,
   Smile,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -27,6 +28,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { BreathingGuideDialog } from "../components/BreathingGuideDialog";
+import { SunnyDollCompanion } from "../components/SunnyDollCompanion";
 import { WorkflowAssistantChat } from "../components/WorkflowAssistantChat";
 import { useAiSettings } from "../contexts/AiSettingsContext";
 import { completeServerSession, patchServerSession } from "../lib/sessionApi";
@@ -402,6 +404,21 @@ export function ActiveWorkflow() {
     cancelEditingTask();
   };
 
+  const deleteTask = (taskId: string) => {
+    const pendingTimer = completionTimerRefs.current[taskId];
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      delete completionTimerRefs.current[taskId];
+    }
+
+    setPendingCompletionIds((prev) => prev.filter((id) => id !== taskId));
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+
+    if (editingTaskId === taskId) {
+      cancelEditingTask();
+    }
+  };
+
   const toggleTaskPin = (taskId: string) => {
     setTasks(prev =>
       prev.map(task =>
@@ -675,6 +692,7 @@ export function ActiveWorkflow() {
                 </div>
 
                 <div className="relative rounded-[1.6rem] border-2 border-[#fff0eb] bg-[#fffaf8] px-5 py-6">
+                  <SunnyDollCompanion sessionFocusTimeSec={focusTime} isTimerRunning={isTimerRunning} />
                   <span className="absolute left-4 top-3 select-none font-serif text-5xl leading-none text-[#f4d4cd]" aria-hidden>
                     &ldquo;
                   </span>
@@ -850,7 +868,7 @@ export function ActiveWorkflow() {
                           <option value="not-important-urgent">Not Important + Urgent</option>
                           <option value="not-important-not-urgent">Not Important + Not Urgent</option>
                         </select>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button size="sm" className="rounded-[1rem] bg-[#ff9d8d] text-white hover:bg-[#ff8c79]" onClick={() => saveTaskEdits(task.id)}>
                             <Save className="w-4 h-4 mr-1" />
                             Save
@@ -858,6 +876,15 @@ export function ActiveWorkflow() {
                           <Button size="sm" variant="outline" className="rounded-[1rem] border-2 border-[#edf1f5]" onClick={cancelEditingTask}>
                             <X className="w-4 h-4 mr-1" />
                             Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-[1rem] border-2 border-[#ffd3cb] text-[#d97463] hover:bg-[#fff1ef]"
+                            onClick={() => deleteTask(task.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
                           </Button>
                         </div>
                       </>

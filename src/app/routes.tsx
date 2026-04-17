@@ -7,6 +7,7 @@ import { TaskSetup } from "./pages/TaskSetup";
 import { ActiveWorkflow } from "./pages/ActiveWorkflow";
 import { FeedbackDashboard } from "./pages/FeedbackDashboard";
 import { ProfileCenter } from "./pages/ProfileCenter";
+import { CompanionPreview } from "./pages/CompanionPreview";
 
 function GuardedTaskSetup() {
   return (
@@ -54,6 +55,7 @@ export const router = createBrowserRouter(
         { path: "workflow", Component: GuardedWorkflow },
         { path: "dashboard", Component: GuardedDashboard },
         { path: "profile", Component: GuardedProfile },
+        { path: "companion-preview", Component: CompanionPreview },
       ],
     },
     {
