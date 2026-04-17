@@ -12,6 +12,7 @@ export interface SavedProgress {
   completedTaskTitles: string[];
   distractionEscrow: string[];
   contextSummary?: string;
+  summaryTitle?: string;
   savedAt: string;
   createdAt: string;
 }

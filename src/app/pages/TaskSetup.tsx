@@ -244,9 +244,12 @@ export function TaskSetup() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-bold text-[#2d3436]">
-                          {item.goal.length > 72 ? `${item.goal.slice(0, 69)}...` : item.goal}
+                          {item.summaryTitle || (item.goal.length > 72 ? `${item.goal.slice(0, 69)}...` : item.goal)}
                         </p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#96a0a6]">
+                        <p className="mt-1 text-sm leading-snug text-[#6f787c]">
+                          {item.goal.length > 56 ? `${item.goal.slice(0, 53)}...` : item.goal}
+                        </p>
+                        <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#96a0a6]">
                           Saved {formatSavedAt(item.savedAt)}
                         </p>
                       </div>
