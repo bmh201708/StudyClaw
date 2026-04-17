@@ -5,6 +5,7 @@ RUN npm ci
 COPY index.html ./index.html
 COPY vite.config.ts ./vite.config.ts
 COPY .env.production ./.env.production
+COPY public ./public
 COPY src ./src
 RUN npm run build
 
