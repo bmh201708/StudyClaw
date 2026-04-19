@@ -232,3 +232,60 @@ export interface UpdateUserAiPreferencesBody {
   baseUrl?: string;
   customApiKey?: string;
 }
+
+export type CompanionScene = "camera-on" | "camera-off";
+export type CompanionState = "normal" | "happy" | "mid" | "tired" | "sleep";
+
+export interface CompanionSignalMetrics {
+  tabVisible?: boolean;
+  faceDetected?: boolean;
+  faceCount?: number;
+  faceCentered?: number;
+  eyeOpenScore?: number;
+  headPoseScore?: number;
+  headStability?: number;
+  motionScore?: number;
+  interactionScore?: number;
+  painScore?: number;
+  anxietyScore?: number;
+  distressScore?: number;
+}
+
+export interface CompanionEvaluateBody {
+  cameraEnabled: boolean;
+  focusDurationSec: number;
+  unfocusDurationSec: number;
+  isTimerRunning?: boolean;
+  clickRecoveryRequested?: boolean;
+  manualPauseActive?: boolean;
+  distressLocked?: boolean;
+  tiredThresholdSec?: number;
+  metrics?: CompanionSignalMetrics;
+}
+
+export interface CompanionEvaluateResponse {
+  scene: CompanionScene;
+  state: CompanionState;
+  focusScore: number;
+  focusDurationSec: number;
+  unfocusDurationSec: number;
+  clickAction:
+    | "none"
+    | "recover-to-happy"
+    | "recover-to-normal"
+    | "repair-to-normal"
+    | "reset-to-normal";
+  asset: {
+    idleDir: string;
+    clickDir?: string;
+  };
+  debug: {
+    attentionScore: number;
+    painScore: number;
+    anxietyScore: number;
+    distressScore: number;
+    distressLocked: boolean;
+    signalsUsed: string[];
+    reasons: string[];
+  };
+}

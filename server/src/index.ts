@@ -5,6 +5,7 @@ import { authRouter } from "./routes/auth.js";
 import { accountRouter } from "./routes/account.js";
 import { analyzeRouter } from "./routes/analyze.js";
 import { chatRouter } from "./routes/chat.js";
+import { companionRouter } from "./routes/companion.js";
 import { progressRouter } from "./routes/progress.js";
 import { sessionsRouter } from "./routes/sessions.js";
 
@@ -24,6 +25,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/account", accountRouter);
 app.use("/api/analyze", analyzeRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/companion", companionRouter);
 app.use("/api/progress", progressRouter);
 app.use("/api/sessions", sessionsRouter);
 
@@ -35,6 +37,6 @@ await initDb();
 
 app.listen(PORT, HOST, () => {
   console.log(
-    `[studyclaw-api] http://${HOST}:${PORT}  (/health, /api/auth, /api/account, /api/analyze, /api/chat, /api/progress, /api/sessions)`,
+    `[studyclaw-api] http://${HOST}:${PORT}  (/health, /api/auth, /api/account, /api/analyze, /api/chat, /api/companion, /api/progress, /api/sessions)`,
   );
 });
