@@ -1,0 +1,828 @@
+﻿import { FaceDetector, FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import type { FaceDetectorResult, FaceLandmarkerResult, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { Camera, CameraOff, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "./ui/button";
+import type {
+  CompanionEvaluateResponse,
+  CompanionSignalMetrics,
+  CompanionState,
+} from "./companionApi";
+import { evaluateCompanion } from "./companionApi";
+
+declare global {
+  interface Window {
+    FaceDetector?: new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => {
+      detect(source: ImageBitmapSource): Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+    };
+  }
+}
+
+interface SunnyDollCompanionProps {
+  sessionFocusTimeSec: number;
+  isTimerRunning: boolean;
+}
+
+type SamplingSnapshot = {
+  metrics: CompanionSignalMetrics;
+  focusedNow: boolean;
+};
+
+type AssetLoadState = "idle" | "loading" | "ready" | "error";
+type VisionLoadState = "idle" | "loading" | "ready" | "error";
+type DetectionMode = "none" | "mediapipe-image" | "native-face-detector" | "camera-presence";
+
+type StateDocSpec = {
+  code: string;
+  sceneTitle: string;
+  stateTitle: string;
+  expression: string;
+  trigger: string;
+  clickEffect: string;
+};
+
+const SAMPLE_INTERVAL_MS = 1200;
+const RECOVERY_ANIMATION_MS = 1800;
+const FALLBACK_FACE_RECOVERY_SEC = 8;
+const MP_WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm";
+const MP_FACE_DETECTOR_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
+const MP_FACE_LANDMARKER_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
+const STATE_DOCS: Record<"camera-off" | "camera-on", Partial<Record<CompanionState, StateDocSpec>>> = {
+  "camera-off": {
+    happy: {
+      code: "happy",
+      sceneTitle: "摄像头未开启",
+      stateTitle: "开心状态",
+      expression: "常规微笑、静态展示",
+      trigger: "应用启动初始状态 / 未达到疲倦阈值",
+      clickEffect: "点击无额外动效，保持当前状态",
+    },
+    tired: {
+      code: "tired",
+      sceneTitle: "摄像头未开启",
+      stateTitle: "疲倦状态",
+      expression: "耷拉眉眼、无精打采",
+      trigger: "持续使用超过 25 分钟",
+      clickEffect: "点击后触发恢复并回到开心状态",
+    },
+  },
+  "camera-on": {
+    normal: {
+      code: "normal",
+      sceneTitle: "摄像头开启",
+      stateTitle: "正常状态",
+      expression: "平静、温和的基础表情",
+      trigger: "启动初始状态 / 不专注少于 3 秒 / 点击恢复后",
+      clickEffect: "点击无额外动效，保持正常状态",
+    },
+    happy: {
+      code: "happy",
+      sceneTitle: "摄像头开启",
+      stateTitle: "愉悦 / 开心状态",
+      expression: "咧嘴大笑、眼睛弯起",
+      trigger: "持续专注超过 3 分钟并进入开心阶段",
+      clickEffect: "点击无额外动效，保持愉悦状态",
+    },
+    mid: {
+      code: "mid",
+      sceneTitle: "摄像头开启",
+      stateTitle: "中间状态",
+      expression: "略带疲惫 / 放空的过渡表情",
+      trigger: "持续专注 5 至 25 分钟之间",
+      clickEffect: "点击立即拉回正常状态，并触发轻微回正动效",
+    },
+    tired: {
+      code: "tired",
+      sceneTitle: "摄像头开启",
+      stateTitle: "疲倦状态",
+      expression: "耷拉眉眼、无精打采",
+      trigger: "持续专注超过 25 分钟",
+      clickEffect: "点击触发恢复，回到正常状态",
+    },
+    sleep: {
+      code: "sleep",
+      sceneTitle: "摄像头开启",
+      stateTitle: "睡觉 / 散架状态",
+      expression: "闭眼耷拉、身体轻微散架",
+      trigger: "连续不专注至少 3 秒",
+      clickEffect: "点击触发修复动效，回到正常状态",
+    },
+  },
+};
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+}
+
+function distance(a: NormalizedLandmark, b: NormalizedLandmark): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function getLandmark(landmarks: NormalizedLandmark[], index: number): NormalizedLandmark | null {
+  return landmarks[index] ?? null;
+}
+
+function getEyeOpenScore(landmarks: NormalizedLandmark[]): number {
+  const leftOuter = getLandmark(landmarks, 33);
+  const leftInner = getLandmark(landmarks, 133);
+  const leftUpper = getLandmark(landmarks, 159);
+  const leftLower = getLandmark(landmarks, 145);
+  const rightOuter = getLandmark(landmarks, 362);
+  const rightInner = getLandmark(landmarks, 263);
+  const rightUpper = getLandmark(landmarks, 386);
+  const rightLower = getLandmark(landmarks, 374);
+
+  if (!leftOuter || !leftInner || !leftUpper || !leftLower || !rightOuter || !rightInner || !rightUpper || !rightLower) {
+    return 0.5;
+  }
+
+  const leftRatio = distance(leftUpper, leftLower) / Math.max(distance(leftOuter, leftInner), 0.0001);
+  const rightRatio = distance(rightUpper, rightLower) / Math.max(distance(rightOuter, rightInner), 0.0001);
+  const averageRatio = (leftRatio + rightRatio) / 2;
+
+  return clamp01((averageRatio - 0.14) / 0.08);
+}
+
+function getFaceCenteredScore(landmarks: NormalizedLandmark[]): number {
+  const nose = getLandmark(landmarks, 1) ?? getLandmark(landmarks, 4);
+  if (!nose) return 0.4;
+
+  const dx = Math.abs(nose.x - 0.5);
+  const dy = Math.abs(nose.y - 0.46);
+  return clamp01(1 - (dx * 1.6 + dy * 2));
+}
+
+function getHeadPoseScore(landmarks: NormalizedLandmark[]): number {
+  const leftFace = getLandmark(landmarks, 234);
+  const rightFace = getLandmark(landmarks, 454);
+  const nose = getLandmark(landmarks, 1) ?? getLandmark(landmarks, 4);
+
+  if (!leftFace || !rightFace || !nose) return 0.5;
+
+  const width = Math.max(Math.abs(rightFace.x - leftFace.x), 0.0001);
+  const normalizedNose = (nose.x - leftFace.x) / width;
+  return clamp01(1 - Math.abs(normalizedNose - 0.5) * 2.3);
+}
+
+function getHeadStabilityScore(
+  landmarks: NormalizedLandmark[],
+  previousNoseRef: React.MutableRefObject<NormalizedLandmark | null>,
+): number {
+  const nose = getLandmark(landmarks, 1) ?? getLandmark(landmarks, 4);
+  if (!nose) return 0.4;
+
+  const previous = previousNoseRef.current;
+  previousNoseRef.current = nose;
+  if (!previous) return 0.8;
+
+  const movement = distance(nose, previous);
+  return clamp01(1 - movement * 16);
+}
+
+function getStateDoc(
+  scene: "camera-on" | "camera-off" | undefined,
+  state: CompanionState | undefined,
+): StateDocSpec {
+  if (scene === "camera-off") {
+    return STATE_DOCS["camera-off"][state === "tired" ? "tired" : "happy"] as StateDocSpec;
+  }
+  return (STATE_DOCS["camera-on"][state ?? "normal"] ?? STATE_DOCS["camera-on"].normal) as StateDocSpec;
+}
+
+function resolveAssetPath(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (!path.startsWith("/assets/")) return path;
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  return `${base}${path}`;
+}
+
+function preloadImage(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    image.src = src;
+  });
+}
+
+
+function buildAssetCandidates(base: string, isRecovery: boolean): string[] {
+  const fileStem = isRecovery ? "recover" : "idle";
+  return [`${base}/${fileStem}.gif`, `${base}/${fileStem}.png`];
+}
+
+async function resolveFirstAvailableAsset(candidates: string[]): Promise<string> {
+  let lastError: Error | null = null;
+  for (const src of candidates) {
+    try {
+      await preloadImage(src);
+      return src;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError ?? new Error("No asset candidates could be loaded.");
+}
+
+async function detectFaceWithNativeApi(video: HTMLVideoElement): Promise<DOMRectReadOnly | null> {
+  if (typeof window.FaceDetector !== "function") return null;
+  try {
+    const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+    const faces = await detector.detect(video);
+    return faces[0]?.boundingBox ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function createFaceLandmarker(): Promise<FaceLandmarker> {
+  const vision = await FilesetResolver.forVisionTasks(MP_WASM_ROOT);
+  return FaceLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: MP_FACE_LANDMARKER_MODEL },
+    runningMode: "IMAGE",
+    numFaces: 1,
+    minFaceDetectionConfidence: 0.12,
+    minFacePresenceConfidence: 0.12,
+    minTrackingConfidence: 0.12,
+    outputFaceBlendshapes: true,
+    outputFacialTransformationMatrixes: false,
+  });
+}
+
+async function createFaceDetector(): Promise<FaceDetector> {
+  const vision = await FilesetResolver.forVisionTasks(MP_WASM_ROOT);
+  return FaceDetector.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: MP_FACE_DETECTOR_MODEL },
+    runningMode: "IMAGE",
+    minDetectionConfidence: 0.12,
+  });
+}
+
+function sampleAttentionWithMediaPipe(
+  detectorResult: FaceDetectorResult,
+  landmarkerResult: FaceLandmarkerResult,
+  lastInteractionAt: number,
+  previousNoseRef: React.MutableRefObject<NormalizedLandmark | null>,
+): SamplingSnapshot {
+  const interactionGapMs = Date.now() - lastInteractionAt;
+  const interactionScore = interactionGapMs < 5000 ? 1 : interactionGapMs < 15000 ? 0.6 : 0.2;
+  const tabVisible = document.visibilityState === "visible";
+  const faceLandmarks = landmarkerResult.faceLandmarks[0];
+  const firstDetection = detectorResult.detections[0];
+  const faceDetected = Boolean((faceLandmarks && faceLandmarks.length > 0) || firstDetection);
+
+  if (!faceDetected) {
+    previousNoseRef.current = null;
+    return {
+      metrics: {
+        tabVisible,
+        faceDetected: false,
+        faceCount: 0,
+        faceCentered: 0,
+        eyeOpenScore: 0,
+        headStability: 0,
+        motionScore: 0,
+        interactionScore,
+      },
+      focusedNow: false,
+    };
+  }
+
+  if (!faceLandmarks) {
+    previousNoseRef.current = null;
+    const box = firstDetection?.boundingBox;
+    const centerX = box ? (box.originX + box.width / 2) / 640 : 0.5;
+    const centerY = box ? (box.originY + box.height / 2) / 480 : 0.46;
+    const faceCentered = clamp01(1 - (Math.abs(centerX - 0.5) * 1.6 + Math.abs(centerY - 0.46) * 2));
+    const focusedNow = tabVisible && interactionScore >= 0.4 && faceCentered >= 0.35;
+
+    return {
+      metrics: {
+        tabVisible,
+        faceDetected: true,
+        faceCount: detectorResult.detections.length,
+        faceCentered,
+        eyeOpenScore: 0.5,
+        headStability: 0.5,
+        motionScore: 0.3,
+        interactionScore,
+      },
+      focusedNow,
+    };
+  }
+
+  const faceCentered = getFaceCenteredScore(faceLandmarks);
+  const eyeOpenScore = getEyeOpenScore(faceLandmarks);
+  const headStability = getHeadStabilityScore(faceLandmarks, previousNoseRef);
+  const headPoseScore = getHeadPoseScore(faceLandmarks);
+  const motionScore = clamp01((1 - headStability) * 1.15);
+
+  const focusedNow =
+    tabVisible &&
+    interactionScore >= 0.4 &&
+    faceCentered >= 0.45 &&
+    eyeOpenScore >= 0.28 &&
+    headPoseScore >= 0.3;
+
+  return {
+    metrics: {
+      tabVisible,
+      faceDetected,
+      faceCount: Math.max(landmarkerResult.faceLandmarks.length, detectorResult.detections.length),
+      faceCentered,
+      eyeOpenScore,
+      headStability: (headStability + headPoseScore) / 2,
+      motionScore,
+      interactionScore,
+    },
+    focusedNow,
+  };
+}
+
+export function SunnyDollCompanion({ sessionFocusTimeSec, isTimerRunning }: SunnyDollCompanionProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const faceDetectorRef = useRef<FaceDetector | null>(null);
+  const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
+  const lastInteractionAtRef = useRef<number>(Date.now());
+  const previousNoseRef = useRef<NormalizedLandmark | null>(null);
+  const recoveryTimeoutRef = useRef<number | null>(null);
+  const focusStreakRef = useRef(0);
+  const unfocusStreakRef = useRef(0);
+  const missingFaceGraceRef = useRef(0);
+
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [visionState, setVisionState] = useState<VisionLoadState>("idle");
+  const [focusStreakSec, setFocusStreakSec] = useState(0);
+  const [unfocusStreakSec, setUnfocusStreakSec] = useState(0);
+  const [lastMetrics, setLastMetrics] = useState<CompanionSignalMetrics>({
+    tabVisible: true,
+    interactionScore: 1,
+  });
+  const [evaluation, setEvaluation] = useState<CompanionEvaluateResponse | null>(null);
+  const [recoveryAssetDir, setRecoveryAssetDir] = useState<string | null>(null);
+  const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>("idle");
+  const [assetError, setAssetError] = useState<string | null>(null);
+  const [readyAssetSrc, setReadyAssetSrc] = useState<string | null>(null);
+  const [videoDebug, setVideoDebug] = useState({ width: 0, height: 0 });
+  const [nativeFaceApiAvailable, setNativeFaceApiAvailable] = useState(false);
+  const [detectionMode, setDetectionMode] = useState<DetectionMode>("none");
+  const [rawDetectionDebug, setRawDetectionDebug] = useState({ detectorFaces: 0, landmarkerFaces: 0, videoTimeSec: 0 });
+
+  useEffect(() => {
+    setNativeFaceApiAvailable(typeof window.FaceDetector === "function");
+    const markInteraction = () => {
+      lastInteractionAtRef.current = Date.now();
+    };
+
+    window.addEventListener("mousemove", markInteraction);
+    window.addEventListener("keydown", markInteraction);
+    window.addEventListener("click", markInteraction);
+    window.addEventListener("scroll", markInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener("mousemove", markInteraction);
+      window.removeEventListener("keydown", markInteraction);
+      window.removeEventListener("click", markInteraction);
+      window.removeEventListener("scroll", markInteraction);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (recoveryTimeoutRef.current) {
+        window.clearTimeout(recoveryTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const evaluateOffMode = async () => {
+      const result = await evaluateCompanion({
+        cameraEnabled: false,
+        focusDurationSec: isTimerRunning ? sessionFocusTimeSec : 0,
+        unfocusDurationSec: 0,
+        isTimerRunning,
+        metrics: {
+          tabVisible: document.visibilityState === "visible",
+          interactionScore: Date.now() - lastInteractionAtRef.current < 15000 ? 1 : 0.3,
+        },
+      });
+      if (result) {
+        setEvaluation(result);
+      }
+    };
+
+    if (!cameraEnabled) {
+      void evaluateOffMode();
+    }
+  }, [cameraEnabled, isTimerRunning, sessionFocusTimeSec]);
+
+  const ensureFaceLandmarker = async () => {
+    if (faceLandmarkerRef.current) return faceLandmarkerRef.current;
+
+    setVisionState("loading");
+    try {
+      const landmarker = await createFaceLandmarker();
+      faceLandmarkerRef.current = landmarker;
+      setVisionState("ready");
+      return landmarker;
+    } catch (error) {
+      setVisionState("error");
+      throw error;
+    }
+  };
+
+  const ensureFaceDetector = async () => {
+    if (faceDetectorRef.current) return faceDetectorRef.current;
+
+    setVisionState("loading");
+    try {
+      const detector = await createFaceDetector();
+      faceDetectorRef.current = detector;
+      setVisionState("ready");
+      return detector;
+    } catch (error) {
+      setVisionState("error");
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    if (!cameraEnabled) return;
+
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      void (async () => {
+        const video = videoRef.current;
+        if (!video || video.readyState < 2) return;
+
+        try {
+          const nativeFaceBox = await detectFaceWithNativeApi(video);
+          const detector = await ensureFaceDetector();
+          const landmarker = await ensureFaceLandmarker();
+          const detectorResult = detector.detect(video);
+          const landmarkerResult = landmarker.detect(video);
+          if (cancelled) return;
+
+          setRawDetectionDebug({
+            detectorFaces: detectorResult.detections.length,
+            landmarkerFaces: landmarkerResult.faceLandmarks.length,
+            videoTimeSec: Number(video.currentTime.toFixed(2)),
+          });
+
+          let snapshot = sampleAttentionWithMediaPipe(
+            detectorResult,
+            landmarkerResult,
+            lastInteractionAtRef.current,
+            previousNoseRef,
+          );
+
+          let nextDetectionMode: DetectionMode = snapshot.metrics.faceDetected ? "mediapipe-image" : "none";
+
+          if (!snapshot.metrics.faceDetected && nativeFaceBox) {
+            const centerX = (nativeFaceBox.x + nativeFaceBox.width / 2) / Math.max(video.videoWidth, 1);
+            const centerY = (nativeFaceBox.y + nativeFaceBox.height / 2) / Math.max(video.videoHeight, 1);
+            const faceCentered = clamp01(1 - (Math.abs(centerX - 0.5) * 1.6 + Math.abs(centerY - 0.46) * 2));
+            snapshot = {
+              metrics: {
+                ...snapshot.metrics,
+                faceDetected: true,
+                faceCount: 1,
+                faceCentered,
+                eyeOpenScore: 0.5,
+                headStability: 0.5,
+                motionScore: 0.25,
+              },
+              focusedNow: snapshot.metrics.tabVisible === true && (snapshot.metrics.interactionScore ?? 0) >= 0.4,
+            };
+            nextDetectionMode = "native-face-detector";
+          }
+
+          if (snapshot.metrics.faceDetected) {
+            missingFaceGraceRef.current = 0;
+          } else {
+            missingFaceGraceRef.current += SAMPLE_INTERVAL_MS / 1000;
+            const interactionScore = snapshot.metrics.interactionScore ?? 0;
+            const canUseCameraPresenceFallback =
+              video.videoWidth >= 320 &&
+              video.videoHeight >= 240 &&
+              snapshot.metrics.tabVisible === true &&
+              interactionScore >= 0.4 &&
+              missingFaceGraceRef.current >= FALLBACK_FACE_RECOVERY_SEC;
+
+            if (canUseCameraPresenceFallback) {
+              snapshot = {
+                metrics: {
+                  ...snapshot.metrics,
+                  faceDetected: true,
+                  faceCount: 1,
+                  faceCentered: 0.58,
+                  eyeOpenScore: 0.46,
+                  headStability: 0.52,
+                  motionScore: 0.22,
+                },
+                focusedNow: isTimerRunning,
+              };
+              nextDetectionMode = "camera-presence";
+            }
+          }
+
+          setDetectionMode(nextDetectionMode);
+          setLastMetrics(snapshot.metrics);
+
+          const nextFocus = snapshot.focusedNow && isTimerRunning ? focusStreakRef.current + SAMPLE_INTERVAL_MS / 1000 : 0;
+          const nextUnfocus = snapshot.focusedNow ? 0 : unfocusStreakRef.current + SAMPLE_INTERVAL_MS / 1000;
+          focusStreakRef.current = nextFocus;
+          unfocusStreakRef.current = nextUnfocus;
+          setFocusStreakSec(nextFocus);
+          setUnfocusStreakSec(nextUnfocus);
+
+          const evaluated = await evaluateCompanion({
+            cameraEnabled: true,
+            focusDurationSec: nextFocus,
+            unfocusDurationSec: nextUnfocus,
+            isTimerRunning,
+            metrics: snapshot.metrics,
+          });
+          if (!cancelled && evaluated) {
+            setEvaluation(evaluated);
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setCameraError(error instanceof Error ? error.message : "MediaPipe face detection failed.");
+          }
+        }
+      })();
+    }, SAMPLE_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [cameraEnabled, isTimerRunning]);
+
+  const desiredAssetCandidates = useMemo(() => {
+    const base = recoveryAssetDir || evaluation?.asset.idleDir;
+    if (!base) return [];
+    const resolvedBase = resolveAssetPath(base);
+    if (!resolvedBase) return [];
+    return buildAssetCandidates(resolvedBase, Boolean(recoveryAssetDir));
+  }, [evaluation?.asset.idleDir, recoveryAssetDir]);
+
+  useEffect(() => {
+    if (desiredAssetCandidates.length === 0) {
+      setAssetLoadState("idle");
+      setAssetError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setAssetLoadState("loading");
+    setAssetError(null);
+
+    void resolveFirstAvailableAsset(desiredAssetCandidates)
+      .then((resolvedSrc) => {
+        if (cancelled) return;
+        setReadyAssetSrc(resolvedSrc);
+        setAssetLoadState("ready");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAssetLoadState("error");
+        setAssetError(error instanceof Error ? error.message : "Asset preload failed.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [desiredAssetCandidates]);
+
+  useEffect(() => {
+    if (!evaluation?.asset.clickDir) return;
+    const clickBase = resolveAssetPath(evaluation.asset.clickDir);
+    if (!clickBase) return;
+    void resolveFirstAvailableAsset(buildAssetCandidates(clickBase, true)).catch(() => undefined);
+  }, [evaluation?.asset.clickDir]);
+
+  const toggleCamera = async () => {
+    if (cameraEnabled) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setCameraEnabled(false);
+      setCameraError(null);
+      previousNoseRef.current = null;
+      focusStreakRef.current = 0;
+      unfocusStreakRef.current = 0;
+      setFocusStreakSec(0);
+      setUnfocusStreakSec(0);
+      missingFaceGraceRef.current = 0;
+      setDetectionMode("none");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("This browser does not support camera access.");
+      return;
+    }
+
+    setCameraBusy(true);
+    setCameraError(null);
+    try {
+      await ensureFaceDetector();
+      await ensureFaceLandmarker();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user",
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraEnabled(true);
+      previousNoseRef.current = null;
+      focusStreakRef.current = 0;
+      unfocusStreakRef.current = 0;
+      setFocusStreakSec(0);
+      setUnfocusStreakSec(0);
+      missingFaceGraceRef.current = 0;
+      setDetectionMode("none");
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => undefined);
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        setVideoDebug({
+          width: videoRef.current.videoWidth || 0,
+          height: videoRef.current.videoHeight || 0,
+        });
+      }
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : "Unable to start the camera.");
+      setCameraEnabled(false);
+    } finally {
+      setCameraBusy(false);
+    }
+  };
+
+  const handleRecoveryClick = async () => {
+    if (!evaluation || evaluation.clickAction === "none") return;
+
+    if (evaluation.asset.clickDir) {
+      setRecoveryAssetDir(evaluation.asset.clickDir);
+      if (recoveryTimeoutRef.current) {
+        window.clearTimeout(recoveryTimeoutRef.current);
+      }
+      recoveryTimeoutRef.current = window.setTimeout(() => {
+        setRecoveryAssetDir(null);
+      }, RECOVERY_ANIMATION_MS);
+    }
+
+    previousNoseRef.current = null;
+    focusStreakRef.current = 0;
+    unfocusStreakRef.current = 0;
+    setFocusStreakSec(0);
+    setUnfocusStreakSec(0);
+
+    const result = await evaluateCompanion({
+      cameraEnabled,
+      focusDurationSec: cameraEnabled ? 0 : Math.min(sessionFocusTimeSec, 1),
+      unfocusDurationSec: 0,
+      isTimerRunning,
+      clickRecoveryRequested: true,
+      metrics: lastMetrics,
+    });
+    if (result) {
+      setEvaluation(result);
+    }
+  };
+
+  const scene = evaluation?.scene ?? (cameraEnabled ? "camera-on" : "camera-off");
+  const state = evaluation?.state ?? (cameraEnabled ? "normal" : "happy");
+  const doc = getStateDoc(scene, state);
+  const indicatorTone = state === "sleep"
+    ? "bg-[#fff1ef] text-[#d67162]"
+    : state === "tired"
+      ? "bg-[#fff8df] text-[#b88921]"
+      : state === "mid"
+        ? "bg-[#eef9fb] text-[#5fa9ba]"
+        : "bg-[#eff9f2] text-[#5c9c7e]";
+
+  return (
+    <div className="relative z-10 mb-6 overflow-hidden rounded-[1.4rem] border border-[#f4ddd6] bg-white/80 p-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex min-h-[240px] flex-1 flex-col items-center justify-center rounded-[1.2rem] border border-dashed border-[#f2d9d1] bg-[radial-gradient(circle_at_top,_rgba(255,225,216,0.65),_rgba(255,250,248,0.95)_55%)] p-4">
+          <video
+            ref={videoRef}
+            className={`mb-4 aspect-video w-full max-w-[260px] rounded-[1rem] border border-[#f0d9d2] bg-[#fff3ef] object-cover ${cameraEnabled ? "block" : "hidden"}`}
+            playsInline
+            muted
+            autoPlay
+          />
+          {readyAssetSrc ? (
+            <img
+              src={readyAssetSrc}
+              alt={doc.stateTitle}
+              className="max-h-[180px] w-auto object-contain"
+            />
+          ) : (
+            <div className="flex h-32 w-32 items-center justify-center rounded-full bg-[#ffe3dc] text-center text-lg font-bold text-[#cb7d6d] shadow-[0_16px_30px_rgba(255,157,141,0.18)]">
+              {doc.code}
+            </div>
+          )}
+
+          <div className="mt-4 text-center">
+            <p className="text-sm font-bold text-[#2d3436]">当前结果: {doc.code}</p>
+            <p className="mt-1 text-xs text-[#7b8489]">{doc.stateTitle}</p>
+            <p className="mt-1 text-xs text-[#9aa3a7]">
+              GIF: {desiredAssetSrc ?? "not-selected"}
+            </p>
+            <p className="mt-1 text-xs text-[#9aa3a7]">
+              加载状态: {assetLoadState}
+            </p>
+          </div>
+        </div>
+
+        <div className="w-full space-y-3 lg:max-w-[320px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-xs font-bold ${indicatorTone}`}>
+              {doc.stateTitle}
+            </span>
+            <span className="rounded-full bg-[#f7f2ef] px-3 py-1 text-xs font-bold text-[#8a7670]">
+              {doc.sceneTitle}
+            </span>
+          </div>
+
+          <div className="rounded-[1rem] bg-[#fff7f4] p-3 text-xs leading-6 text-[#6b7276]">
+            <div>表情表现: {doc.expression}</div>
+            <div>触发条件: {doc.trigger}</div>
+            <div>点击交互: {doc.clickEffect}</div>
+          </div>
+
+          <div className="rounded-[1rem] bg-[#fff7f4] p-3 text-xs leading-6 text-[#6b7276]">
+            <div>专注度: {((evaluation?.focusScore ?? 1) * 100).toFixed(0)}%</div>
+            <div>连续专注: {formatDuration(cameraEnabled ? focusStreakSec : sessionFocusTimeSec)}</div>
+            <div>连续不专注: {formatDuration(unfocusStreakSec)}</div>
+            <div>检测信号: {(evaluation?.debug.signalsUsed ?? []).join(", ") || "none"}</div>
+            <div>MediaPipe: {visionState}</div>
+            <div>Native FaceDetector: {nativeFaceApiAvailable ? "available" : "unavailable"}</div>
+            <div>Detection mode: {detectionMode}</div>
+            <div>Video: {videoDebug.width} x {videoDebug.height}</div>
+            <div>Detector faces: {rawDetectionDebug.detectorFaces}</div>
+            <div>Landmarker faces: {rawDetectionDebug.landmarkerFaces}</div>
+            <div>Video time: {rawDetectionDebug.videoTimeSec}s</div>
+          </div>
+
+          <div className="rounded-[1rem] bg-[#f8fdff] p-3 text-xs leading-6 text-[#6b7276]">
+            <div>faceDetected: {String(lastMetrics.faceDetected ?? false)}</div>
+            <div>faceCentered: {((lastMetrics.faceCentered ?? 0) * 100).toFixed(0)}%</div>
+            <div>eyeOpenScore: {((lastMetrics.eyeOpenScore ?? 0) * 100).toFixed(0)}%</div>
+            <div>headStability: {((lastMetrics.headStability ?? 0) * 100).toFixed(0)}%</div>
+            <div>interactionScore: {((lastMetrics.interactionScore ?? 0) * 100).toFixed(0)}%</div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void toggleCamera()}
+              disabled={cameraBusy}
+              className="rounded-full bg-[#ff9d8d] text-white hover:bg-[#ff8c79]"
+            >
+              {cameraEnabled ? <CameraOff className="mr-2 h-4 w-4" /> : <Camera className="mr-2 h-4 w-4" />}
+              {cameraEnabled ? "关闭摄像头" : "开启摄像头"}
+            </Button>
+            {evaluation?.clickAction !== "none" && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleRecoveryClick()}
+                className="rounded-full border-[#d8ebef] bg-[#eef9fb] text-[#5fa9ba] hover:bg-[#e5f6f9]"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                点击恢复
+              </Button>
+            )}
+          </div>
+
+          {cameraError && <p className="text-xs leading-relaxed text-[#c56c5d]">{cameraError}</p>}
+          {assetError && <p className="text-xs leading-relaxed text-[#c56c5d]">{assetError}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+

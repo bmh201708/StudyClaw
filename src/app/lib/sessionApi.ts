@@ -3,6 +3,7 @@
  * 生产环境可设置 VITE_API_URL=https://your-api.example.com
  */
 import { loadAuthSession } from "./authStorage";
+import { readApiError } from "./apiError";
 
 export function apiUrl(path: string): string {
   const root = import.meta.env.VITE_API_URL as string | undefined;
@@ -39,6 +40,14 @@ export interface ServerSession {
   contextSummary?: string;
 }
 
+export type TaskRecommendation = {
+  title: string;
+  description: string;
+  url: string;
+  kind: "site" | "doc";
+  source: "search" | "fallback";
+};
+
 export async function createServerSession(
   goal: string,
   mode: WorkflowMode,
@@ -54,10 +63,10 @@ export async function createServerSession(
         ...(opts?.contextSummary ? { contextSummary: opts.contextSummary } : {}),
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) throw await readApiError(res);
     return (await res.json()) as ServerSession;
-  } catch {
-    return null;
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -116,5 +125,27 @@ export async function fetchCompletedSessions(limit = 20): Promise<ServerSession[
     return data.sessions ?? [];
   } catch {
     return [];
+  }
+}
+
+export async function fetchTaskRecommendations(
+  taskTitle: string,
+  goal?: string,
+  language: "zh" | "en" = "zh",
+): Promise<{ query: string; items: TaskRecommendation[] } | null> {
+  try {
+    const res = await fetch(apiUrl("/api/sessions/recommendations"), {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        taskTitle,
+        goal,
+        language,
+      }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { query: string; items: TaskRecommendation[] };
+  } catch {
+    return null;
   }
 }

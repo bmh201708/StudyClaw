@@ -46,6 +46,9 @@ export async function runWorkflowAssistant(input) {
                 message: text,
                 model: config.model,
                 toolsUsed: Array.from(toolsUsed),
+                ...(typeof response.usage?.total_tokens === "number"
+                    ? { totalTokens: response.usage.total_tokens }
+                    : {}),
             };
         }
         messages.push({

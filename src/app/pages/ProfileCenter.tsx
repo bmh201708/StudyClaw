@@ -12,6 +12,8 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import { Switch } from "../components/ui/switch";
 import { useAiSettings } from "../contexts/AiSettingsContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useBilling } from "../contexts/BillingContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import { useUserPreferences } from "../contexts/UserPreferencesContext";
 import { fetchAccountStats, updateAccountProfile, changeAccountPassword, type AccountStats } from "../lib/accountApi";
 import { normalizeAiSettings, type AiSettings } from "../lib/aiSettingsStorage";
@@ -43,6 +45,8 @@ function formatSessionDate(date?: string): string {
 export function ProfileCenter() {
   const navigate = useNavigate();
   const { user, updateUser, logout } = useAuth();
+  const { currentCredits, planCode, weeklyCreditAllowance, nextCreditResetAt } = useBilling();
+  const { language } = useLanguage();
   const { preferences, savePreferences, isLoading: isPreferencesLoading } = useUserPreferences();
   const { settings, setSettings, isLoading: isAiLoading } = useAiSettings();
   const [displayName, setDisplayName] = useState(user?.name ?? "");
@@ -117,6 +121,16 @@ export function ProfileCenter() {
       height: Math.max(18, Math.round((item.focusTime / maxFocus) * 112)),
     }));
   }, [stats]);
+
+  const formatSubscriptionReset = (value?: string | null) => {
+    if (!value) return language === "zh" ? "每周一 00:00（上海）" : "Monday 00:00 (Shanghai)";
+    return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  };
 
   const initials = useMemo(() => {
     const name = (user?.name || "S").trim();
@@ -508,6 +522,60 @@ export function ProfileCenter() {
         </div>
 
         <div className="space-y-6">
+          <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_16px_0_rgba(0,0,0,0.03)]">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-3 text-2xl [font-family:Fredoka,sans-serif]">
+                <Sparkles className="h-6 w-6 text-[#f2be41]" />
+                {language === "zh" ? "Subscription & Credits" : "Subscription & Credits"}
+              </CardTitle>
+              <CardDescription className="text-[#6f787c]">
+                {language === "zh"
+                  ? "查看你当前套餐、余额和下一次 credits 刷新时间。"
+                  : "See your current plan, credits balance, and the next weekly refresh."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[1.5rem] bg-[#fbfcfd] p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7b8489] [font-family:Fredoka,sans-serif]">
+                    {language === "zh" ? "当前套餐" : "Current plan"}
+                  </p>
+                  <p className="mt-2 text-2xl font-bold capitalize [font-family:Fredoka,sans-serif]">
+                    {planCode ?? "--"}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] bg-[#fbfcfd] p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7b8489] [font-family:Fredoka,sans-serif]">
+                    {language === "zh" ? "当前余额" : "Current credits"}
+                  </p>
+                  <p className="mt-2 text-2xl font-bold [font-family:Fredoka,sans-serif]">
+                    {currentCredits ?? "--"}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-[1.5rem] bg-[#fbfcfd] p-4 text-sm text-[#5f676a]">
+                <p>
+                  {language === "zh"
+                    ? `本周额度：${weeklyCreditAllowance ?? "--"}`
+                    : `Weekly allowance: ${weeklyCreditAllowance ?? "--"}`}
+                </p>
+                <p className="mt-2">
+                  {language === "zh"
+                    ? `下次重置：${formatSubscriptionReset(nextCreditResetAt)}`
+                    : `Next reset: ${formatSubscriptionReset(nextCreditResetAt)}`}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-[1.25rem] border-2 border-[#edf1f5]"
+                onClick={() => navigate("/pricing")}
+              >
+                {language === "zh" ? "查看套餐" : "View plans"}
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_16px_0_rgba(0,0,0,0.03)]">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-3 text-2xl [font-family:Fredoka,sans-serif]">

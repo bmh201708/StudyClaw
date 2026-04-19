@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+﻿import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   Activity,
@@ -29,9 +29,16 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { BreathingGuideDialog } from "../components/BreathingGuideDialog";
 import { SunnyDollCompanion } from "../components/SunnyDollCompanion";
+import type { CompanionDebugSnapshot } from "../components/SunnyDollCompanion";
 import { WorkflowAssistantChat } from "../components/WorkflowAssistantChat";
 import { useAiSettings } from "../contexts/AiSettingsContext";
-import { completeServerSession, patchServerSession } from "../lib/sessionApi";
+import { useLanguage } from "../contexts/LanguageContext";
+import {
+  completeServerSession,
+  fetchTaskRecommendations,
+  patchServerSession,
+} from "../lib/sessionApi";
+import type { TaskRecommendation } from "../lib/sessionApi";
 import type { PlannedTask } from "../lib/analyzeApi";
 
 interface Task {
@@ -56,7 +63,7 @@ interface DistractionItem {
   timestamp: Date;
 }
 
-type AiPick = { title: string; description: string; url: string; kind: "site" | "doc" };
+type AiPick = TaskRecommendation;
 
 function loadPlannedTasks(): Task[] | null {
   const raw = sessionStorage.getItem("plannedTasks");
@@ -105,18 +112,21 @@ function picksForContext(goal: string, activeTaskLabel: string | undefined): AiP
         description: "Systems and component guidance for interface work.",
         url: "https://m3.material.io",
         kind: "site",
+        source: "fallback",
       },
       {
         title: "WCAG 2.2 quick reference",
         description: "Accessibility checks while you design.",
         url: "https://www.w3.org/WAI/WCAG22/quickref/",
         kind: "doc",
+        source: "fallback",
       },
       {
         title: "Laws of UX",
         description: "Psychology-backed design heuristics.",
         url: "https://lawsofux.com",
         kind: "site",
+        source: "fallback",
       },
     ];
   }
@@ -127,18 +137,21 @@ function picksForContext(goal: string, activeTaskLabel: string | undefined): AiP
         description: "Authoritative web platform reference.",
         url: "https://developer.mozilla.org",
         kind: "doc",
+        source: "fallback",
       },
       {
         title: "Patterns.dev",
         description: "Modern app architecture patterns.",
         url: "https://www.patterns.dev",
         kind: "site",
+        source: "fallback",
       },
       {
         title: "HTTP status reference",
         description: "Quick lookup for API work.",
         url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status",
         kind: "doc",
+        source: "fallback",
       },
     ];
   }
@@ -149,18 +162,21 @@ function picksForContext(goal: string, activeTaskLabel: string | undefined): AiP
         description: "Clear writing for complex ideas.",
         url: "https://www.plainlanguage.gov/guidelines/",
         kind: "doc",
+        source: "fallback",
       },
       {
-        title: "Grammarly blog — writing craft",
+        title: "Grammarly blog 鈥?writing craft",
         description: "Structure and clarity for longform.",
         url: "https://www.grammarly.com/blog",
         kind: "site",
+        source: "fallback",
       },
       {
         title: "Hemingway Editor",
         description: "Readable sentence structure at a glance.",
         url: "https://hemingwayapp.com",
         kind: "site",
+        source: "fallback",
       },
     ];
   }
@@ -170,25 +186,50 @@ function picksForContext(goal: string, activeTaskLabel: string | undefined): AiP
       description: "Timer aligned with deep work sprints.",
       url: "https://pomofocus.io",
       kind: "site",
+      source: "fallback",
     },
     {
       title: "How to take smart notes",
       description: "Capture ideas without breaking flow.",
       url: "https://fortelabs.co/blog/how-to-take-smart-notes/",
       kind: "site",
+      source: "fallback",
     },
     {
       title: "Cognitive load",
       description: "Why pauses matter mid-task.",
       url: "https://en.wikipedia.org/wiki/Cognitive_load",
       kind: "doc",
+      source: "fallback",
     },
   ];
 }
 
-export function ActiveWorkflow() {
+function parseDurationToSeconds(value: string | undefined): number {
+  if (!value) return 25 * 60;
+  const normalized = value.toLowerCase().trim();
+  const hourMatch = normalized.match(/(\d+(?:\.\d+)?)\s*h/);
+  const minMatch = normalized.match(/(\d+(?:\.\d+)?)\s*m/);
+  const chineseHourMatch = normalized.match(/(\d+(?:\.\d+)?)\s*小时/);
+  const chineseMinMatch = normalized.match(/(\d+(?:\.\d+)?)\s*分/);
+
+  const hours =
+    Number(hourMatch?.[1] ?? chineseHourMatch?.[1] ?? 0) || 0;
+  const mins =
+    Number(minMatch?.[1] ?? chineseMinMatch?.[1] ?? 0) || 0;
+
+  if (hours > 0 || mins > 0) {
+    return Math.round(hours * 3600 + mins * 60);
+  }
+
+  const firstNumber = Number(normalized.match(/\d+(?:\.\d+)?/)?.[0] ?? 25);
+  return Math.round(firstNumber * 60);
+}
+
+function ActiveWorkflow() {
   const navigate = useNavigate();
   const { settings } = useAiSettings();
+  const { language } = useLanguage();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [pendingCompletionIds, setPendingCompletionIds] = useState<string[]>([]);
   const [distractions, setDistractions] = useState<DistractionItem[]>([]);
@@ -198,6 +239,8 @@ export function ActiveWorkflow() {
   const [breathingGuideOpen, setBreathingGuideOpen] = useState(false);
   const [focusTime, setFocusTime] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [manualPauseActive, setManualPauseActive] = useState(false);
+  const [autoPauseReason, setAutoPauseReason] = useState<"distraction" | "distress" | null>(null);
   const [newTaskName, setNewTaskName] = useState("");
   const [newTaskDuration, setNewTaskDuration] = useState("");
   const [newTaskNote, setNewTaskNote] = useState("");
@@ -208,6 +251,8 @@ export function ActiveWorkflow() {
   const [editTaskDuration, setEditTaskDuration] = useState("");
   const [editTaskNote, setEditTaskNote] = useState("");
   const [editTaskPriority, setEditTaskPriority] = useState<PriorityLevel>("important-not-urgent");
+  const [companionDebug, setCompanionDebug] = useState<CompanionDebugSnapshot | null>(null);
+  const [aiRecommendations, setAiRecommendations] = useState<AiPick[]>([]);
   const completionTimerRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [hasLinkedContext, setHasLinkedContext] = useState(false);
 
@@ -226,6 +271,8 @@ export function ActiveWorkflow() {
     if (plannedTasks) {
       setTasks(plannedTasks);
       setIsTimerRunning(true);
+      setManualPauseActive(false);
+      setAutoPauseReason(null);
       return;
     }
 
@@ -238,6 +285,8 @@ export function ActiveWorkflow() {
     ];
     setTasks(mockTasks);
     setIsTimerRunning(true);
+    setManualPauseActive(false);
+    setAutoPauseReason(null);
   }, []);
 
   // Focus timer
@@ -428,10 +477,10 @@ export function ActiveWorkflow() {
   };
 
   const getPriorityLabel = (priority: PriorityLevel) => {
-    if (priority === "important-urgent") return "Important + Urgent";
-    if (priority === "important-not-urgent") return "Important + Not Urgent";
-    if (priority === "not-important-urgent") return "Not Important + Urgent";
-    return "Not Important + Not Urgent";
+    if (priority === "important-urgent") return language === "zh" ? "重要 + 紧急" : "Important + Urgent";
+    if (priority === "important-not-urgent") return language === "zh" ? "重要 + 不紧急" : "Important + Not Urgent";
+    if (priority === "not-important-urgent") return language === "zh" ? "不重要 + 紧急" : "Not Important + Urgent";
+    return language === "zh" ? "不重要 + 不紧急" : "Not Important + Not Urgent";
   };
 
   const getPriorityStyle = (priority: PriorityLevel) => {
@@ -457,9 +506,9 @@ export function ActiveWorkflow() {
   const firstOpenTask = orderedTasks.find(
     (t) => !t.completed && !pendingCompletionIds.includes(t.id),
   );
-  const aiRecommendations = useMemo(
-    () => picksForContext(goal, firstOpenTask?.text),
-    [goal, firstOpenTask?.text],
+  const activeTaskDurationSec = useMemo(
+    () => Math.min(parseDurationToSeconds(firstOpenTask?.duration), 25 * 60),
+    [firstOpenTask?.duration],
   );
 
   const stuckNoProgress = focusTime >= 120 && completedCount === 0 && tasks.length > 0;
@@ -468,10 +517,46 @@ export function ActiveWorkflow() {
 
   const healingQuote =
     distractions.length > 0
-      ? "Take a deep breath. You noticed a pull away from the task—that already matters. It's perfectly okay to park that thought in the inbox and return when you're ready."
+      ? "Take a deep breath. You noticed a pull away from the task鈥攖hat already matters. It's perfectly okay to park that thought in the inbox and return when you're ready."
       : stuckNoProgress || showEmpathy
         ? "Take a deep breath. The complexity you're navigating is significant. It's perfectly okay to pause here, shrink the next step, or ask for a lighter on-ramp."
-        : "You're in a steady rhythm. We'll surface gentle support if friction shows up—through a distraction capture or a long stretch without movement.";
+        : "You're in a steady rhythm. We'll surface gentle support if friction shows up鈥攖hrough a distraction capture or a long stretch without movement.";
+
+  useEffect(() => {
+    if (!firstOpenTask?.text) {
+      setAiRecommendations([]);
+      return;
+    }
+
+    let cancelled = false;
+    const fallback = picksForContext(goal, firstOpenTask.text);
+
+    void fetchTaskRecommendations(firstOpenTask.text, goal, language)
+      .then((result) => {
+        if (cancelled) return;
+        setAiRecommendations(result?.items?.length ? result.items : fallback);
+      })
+      .catch(() => {
+        if (!cancelled) setAiRecommendations(fallback);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [firstOpenTask?.text, goal, language]);
+
+  useEffect(() => {
+    if (!isTimerRunning || manualPauseActive || !companionDebug) return;
+    if (companionDebug.distressLocked) {
+      setIsTimerRunning(false);
+      setAutoPauseReason("distress");
+      return;
+    }
+    if (companionDebug.stateCode === "sleep") {
+      setIsTimerRunning(false);
+      setAutoPauseReason("distraction");
+    }
+  }, [companionDebug, isTimerRunning, manualPauseActive]);
 
   const handleFinishSession = async () => {
     const contextSummary = sessionStorage.getItem("analysisContext") || "";
@@ -514,10 +599,38 @@ export function ActiveWorkflow() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const logicTrace =
-    distractions.length > 0
-      ? `IF (distraction_inbox.length >= ${distractions.length}) THEN companion.amplify_support(TRUE)\nIF (focus_elapsed_sec >= ${Math.min(Math.max(focusTime, 0), 999)}) THEN observe_cognitive_friction()`
-      : `IF (focus_elapsed_sec >= 120 && completed_tasks == 0) THEN INVOKE_EMPATHY_BUBBLE()\nELSE companion.observe()`;
+  const handleTimerToggle = () => {
+    if (isTimerRunning) {
+      setIsTimerRunning(false);
+      setManualPauseActive(true);
+      setAutoPauseReason(null);
+      setShowEmpathy(false);
+      return;
+    }
+
+    setManualPauseActive(false);
+    setAutoPauseReason(null);
+    setIsTimerRunning(true);
+  };
+
+  const observationSections = companionDebug
+    ? {
+        statusLines: [
+          `${language === "zh" ? "表情表现" : "Expression"}: ${companionDebug.expression}`,
+          `${language === "zh" ? "触发条件" : "Trigger"}: ${companionDebug.trigger}`,
+          `${language === "zh" ? "点击交互" : "Click action"}: ${companionDebug.clickEffect}`,
+        ],
+        focusLines: [
+          `${language === "zh" ? "专注度" : "Focus score"}: ${companionDebug.focusScorePercent}%`,
+          `${language === "zh" ? "连续专注" : "Focus streak"}: ${companionDebug.focusStreakLabel}`,
+          `${language === "zh" ? "连续不专注" : "Unfocus streak"}: ${companionDebug.unfocusStreakLabel}`,
+          `${language === "zh" ? "实时注意力" : "Live attention"}: ${companionDebug.attentionPercent}%`,
+          `${language === "zh" ? "痛苦得分" : "Pain score"}: ${companionDebug.metrics.painPercent}%`,
+          `${language === "zh" ? "焦虑得分" : "Anxiety score"}: ${companionDebug.metrics.anxietyPercent}%`,
+          `${language === "zh" ? "不适综合得分" : "Distress score"}: ${companionDebug.metrics.distressPercent}%`,
+        ],
+      }
+    : null;
 
   const scrollToTasks = () => {
     document.getElementById("task-breakdown-start")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -548,60 +661,73 @@ export function ActiveWorkflow() {
         onContinueToTasks={scrollToTasks}
       />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
+      <div className="space-y-2 text-center">
+        <div className="flex justify-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#bfe8d7] bg-[#eff9f2] px-4 py-1.5 text-sm font-bold text-[#4b6c61]">
             <Sparkles className="h-4 w-4" />
-            ACTIVE QUEST
+            {language === "zh" ? "\u5f53\u524d\u4efb\u52a1" : "ACTIVE QUEST"}
           </div>
-          <h1 className="text-4xl font-bold tracking-tight text-[#2d3436] sm:text-5xl [font-family:Fredoka,sans-serif]">Active Workflow</h1>
-          <p className="max-w-2xl text-[#636e72]">Goal: {goal}</p>
-          {hasLinkedContext && (
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#65b99d]">已合并上传材料至会话上下文。</p>
-          )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-3 rounded-[1.75rem] border-4 border-white bg-white px-5 py-3 text-[#2d3436] shadow-[0_10px_0_rgba(0,0,0,0.03)]">
-          <Clock className="h-5 w-5 shrink-0 text-[#8bc9d8]" />
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-[#7b8489] [font-family:Fredoka,sans-serif]">Focus time</p>
-            <p className="text-2xl font-bold tabular-nums [font-family:Fredoka,sans-serif]">{formatTime(focusTime)}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsTimerRunning((v) => !v)}
-            className="ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#edf1f5] bg-[#fdfdfd] text-[#636e72] transition-colors hover:border-[#ffd3cb] hover:bg-[#fff1ef]"
-            aria-label={isTimerRunning ? "暂停专注计时" : "继续专注计时"}
-          >
-            {isTimerRunning ? (
-              <Pause className="h-4 w-4" strokeWidth={2.25} />
-            ) : (
-              <Play className="h-4 w-4 fill-current" strokeWidth={2.25} />
-            )}
-          </button>
-          {isTimerRunning && isFocused && (
-            <span className="rounded-full bg-[#eff9f2] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#65b99d]">
-              In flow
-            </span>
-          )}
-          {isDistracted && (
-            <span className="rounded-full bg-[#fff8df] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#d2a12d]">
-              Heavy inbox
-            </span>
-          )}
-        </div>
+        <h1 className="text-4xl font-bold tracking-tight text-[#2d3436] sm:text-5xl [font-family:Fredoka,sans-serif]">
+          {language === "zh" ? "\u5f53\u524d\u6d41\u7a0b" : "Active Workflow"}
+        </h1>
+        <p className="mx-auto max-w-2xl text-[#636e72]">{language === "zh" ? "\u76ee\u6807" : "Goal"}: {goal}</p>
+        {hasLinkedContext && (
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#65b99d]">
+            {language === "zh"
+              ? "\u5df2\u5408\u5e76\u4e0a\u4f20\u6750\u6599\u81f3\u4f1a\u8bdd\u4e0a\u4e0b\u6587\u3002"
+              : "Uploaded context has been merged into the session."}
+          </p>
+        )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        {/* Left: AI resources, distraction inbox, healing companion */}
-        <div className="flex flex-col gap-6 lg:min-h-[min(100%,calc(100vh-10rem))]">
+      <div className="grid gap-6 lg:grid-cols-[0.92fr_1.18fr_1fr] lg:items-start">
+        <div className="flex flex-col gap-6">
+          <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl [font-family:Fredoka,sans-serif]">
+                <Plus className="w-5 h-5" />
+                {language === "zh" ? "分心暂存箱" : "Distraction Escrow Inbox"}
+              </CardTitle>
+              <CardDescription className="text-[#6f787c]">
+                {language === "zh" ? "先把分心记下来，继续保持当前专注。" : "Capture thoughts for later - stay focused now"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder={language === "zh" ? "例如：查一个资料、回一封邮件……" : "e.g., Look up a reference, check email..."}
+                  value={newDistraction}
+                  onChange={(e) => setNewDistraction(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addDistraction()}
+                  className="rounded-[1.25rem] border-2 border-[#edf1f5]"
+                />
+                <Button onClick={addDistraction} size="sm" className="rounded-[1.25rem] bg-[#ff9d8d] text-white hover:bg-[#ff8c79]">
+                  {language === "zh" ? "添加" : "Add"}
+                </Button>
+              </div>
+
+              {distractions.length > 0 && (
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {distractions.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-start gap-2 rounded-[1rem] border-2 border-[#edf1f5] bg-[#fbfcfd] p-3"
+                    >
+                      <Circle className="mt-1 h-3 w-3 flex-shrink-0 text-[#ff9d8d]" />
+                      <p className="flex-1 text-sm text-[#3d4648]">{item.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
             <CardHeader className="pb-2">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#7b8489] [font-family:Fredoka,sans-serif]">AI picks for this session</p>
-              <CardTitle className="text-2xl text-[#2d3436] [font-family:Fredoka,sans-serif]">Recommended sites & docs</CardTitle>
-              <CardDescription className="text-[#6f787c]">
-                Based on your goal and current task
-                {firstOpenTask ? `: “${firstOpenTask.text.slice(0, 48)}${firstOpenTask.text.length > 48 ? "…" : ""}”` : ""}.
-              </CardDescription>
+              <CardTitle className="text-2xl text-[#2d3436] [font-family:Fredoka,sans-serif]">
+                {language === "zh" ? "推荐站点与文档" : "Recommended sites & docs"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-0">
               {aiRecommendations.map((pick) => (
@@ -622,7 +748,9 @@ export function ActiveWorkflow() {
                     </div>
                     <p className="mt-1 text-sm leading-snug text-[#6f787c]">{pick.description}</p>
                     <p className="mt-2 text-[11px] uppercase tracking-wide text-[#9aa3a7]">
-                      {pick.kind === "doc" ? "Document" : "Website"} · opens in new tab
+                      {pick.kind === "doc"
+                        ? (language === "zh" ? "文档" : "Document")
+                        : (language === "zh" ? "网站" : "Website")} · {language === "zh" ? "新标签页打开" : "opens in new tab"}
                     </p>
                   </div>
                 </a>
@@ -630,47 +758,48 @@ export function ActiveWorkflow() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[2rem] border-4 border-white bg-white/95 shadow-[0_12px_0_rgba(0,0,0,0.03)]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl [font-family:Fredoka,sans-serif]">
-                <Plus className="w-5 h-5" />
-                Distraction Escrow Inbox
-              </CardTitle>
-              <CardDescription className="text-[#6f787c]">
-                Capture thoughts for later - stay focused now
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="e.g., Look up a reference, check email..."
-                  value={newDistraction}
-                  onChange={(e) => setNewDistraction(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addDistraction()}
-                  className="rounded-[1.25rem] border-2 border-[#edf1f5]"
-                />
-                <Button onClick={addDistraction} size="sm" className="rounded-[1.25rem] bg-[#ff9d8d] text-white hover:bg-[#ff8c79]">
-                  Add
-                </Button>
-              </div>
+        </div>
 
-              {distractions.length > 0 && (
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {distractions.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-start gap-2 rounded-[1rem] border-2 border-[#edf1f5] bg-[#fbfcfd] p-3"
-                    >
-                      <Circle className="mt-1 h-3 w-3 flex-shrink-0 text-[#ff9d8d]" />
-                      <p className="flex-1 text-sm text-[#3d4648]">{item.text}</p>
-                    </div>
-                  ))}
-                </div>
+        <div className="space-y-6">
+          <div className="mx-auto flex w-full max-w-[20rem] shrink-0 flex-wrap items-center justify-center gap-3 rounded-[1.75rem] border-4 border-white bg-white px-5 py-3 text-[#2d3436] shadow-[0_10px_0_rgba(0,0,0,0.03)]">
+            <Clock className="h-5 w-5 shrink-0 text-[#8bc9d8]" />
+            <div className="text-center">
+              <p className="text-xs uppercase tracking-[0.18em] text-[#7b8489] [font-family:Fredoka,sans-serif]">
+                {language === "zh" ? "\u4e13\u6ce8\u65f6\u957f" : "Focus time"}
+              </p>
+              <p className="text-2xl font-bold tabular-nums [font-family:Fredoka,sans-serif]">{formatTime(focusTime)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleTimerToggle}
+              className="ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#edf1f5] bg-[#fdfdfd] text-[#636e72] transition-colors hover:border-[#ffd3cb] hover:bg-[#fff1ef]"
+              aria-label={
+                isTimerRunning
+                  ? (language === "zh" ? "主动暂停专注计时" : "Pause focus timer manually")
+                  : (language === "zh" ? "开始或恢复专注计时" : "Start or resume focus timer")
+              }
+            >
+              {isTimerRunning ? (
+                <Pause className="h-4 w-4" strokeWidth={2.25} />
+              ) : (
+                <Play className="h-4 w-4 fill-current" strokeWidth={2.25} />
               )}
-            </CardContent>
-          </Card>
+            </button>
+            {isDistracted && (
+              <span className="rounded-full bg-[#fff8df] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#d2a12d]">
+                {language === "zh" ? "分心较多" : "Heavy inbox"}
+              </span>
+            )}
+            {!isTimerRunning && autoPauseReason && (
+              <span className="rounded-full bg-[#fff1ef] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#d67162]">
+                {autoPauseReason === "distress"
+                  ? (language === "zh" ? "检测到痛苦/焦虑，已自动暂停" : "Auto-paused by pain/anxiety detection")
+                  : (language === "zh" ? "检测到分心，已自动暂停" : "Auto-paused by distraction")}
+              </span>
+            )}
+          </div>
 
-          <div className="mt-auto space-y-4">
+          <div className="space-y-4">
             <Card
               className={`overflow-hidden rounded-2xl border transition-colors ${
                 healingProminent
@@ -685,14 +814,25 @@ export function ActiveWorkflow() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-[#fff1ef] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#e98573]">
-                      Companion active
+                      {language === "zh" ? "陪伴已激活" : "Companion active"}
                     </span>
-                    <h2 className="text-base font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">The Healing Companion</h2>
+                    <h2 className="text-base font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">
+                      {language === "zh" ? "疗愈陪伴" : "The Healing Companion"}
+                    </h2>
                   </div>
                 </div>
 
-                <div className="relative rounded-[1.6rem] border-2 border-[#fff0eb] bg-[#fffaf8] px-5 py-6">
-                  <SunnyDollCompanion sessionFocusTimeSec={focusTime} isTimerRunning={isTimerRunning} />
+                <div className="space-y-6">
+                  <div className="mx-auto flex aspect-square w-full max-w-[24rem] items-center justify-center rounded-full border-2 border-[#fff0eb] bg-[#fffaf8] p-4">
+                  <SunnyDollCompanion
+                    sessionFocusTimeSec={focusTime}
+                    activeTaskDurationSec={activeTaskDurationSec}
+                    isTimerRunning={isTimerRunning}
+                    manualPauseActive={manualPauseActive}
+                    onDebugChange={setCompanionDebug}
+                  />
+                  </div>
+                  <div className="relative rounded-[1.6rem] border-2 border-[#fff0eb] bg-[#fffaf8] px-5 py-6">
                   <span className="absolute left-4 top-3 select-none font-serif text-5xl leading-none text-[#f4d4cd]" aria-hidden>
                     &ldquo;
                   </span>
@@ -703,18 +843,17 @@ export function ActiveWorkflow() {
                         <Button
                           className="rounded-full bg-[#ff9d8d] text-white hover:bg-[#ff8c79]"
                           onClick={() => {
-                            setIsTimerRunning(false);
-                            setShowEmpathy(false);
+                            handleTimerToggle();
                           }}
                         >
-                          I&apos;m taking a break.
+                          {language === "zh" ? "我先主动暂停一下" : "I’m taking a break."}
                         </Button>
                       ) : (
                         <Button
                           className="rounded-full bg-[#ff9d8d] text-white hover:bg-[#ff8c79]"
-                          onClick={() => setIsTimerRunning(true)}
+                          onClick={handleTimerToggle}
                         >
-                          Continue
+                          {language === "zh" ? "继续专注" : "Continue"}
                         </Button>
                       )}
                       <Button
@@ -722,7 +861,7 @@ export function ActiveWorkflow() {
                         className="rounded-full border-[#d8ebef] bg-[#eef9fb] text-[#5fa9ba] hover:bg-[#e5f6f9]"
                         onClick={() => setBreathingGuideOpen(true)}
                       >
-                        Guide me through this.
+                        {language === "zh" ? "带我缓一缓" : "Guide me through this."}
                       </Button>
                     </div>
                   )}
@@ -735,41 +874,60 @@ export function ActiveWorkflow() {
                       }}
                       className="relative z-10 mt-3 text-sm text-[#9aa3a7] underline-offset-4 hover:text-[#636e72] hover:underline"
                     >
-                      Not now.
+                      {language === "zh" ? "先不用" : "Not now."}
                     </button>
                   )}
+                </div>
                 </div>
 
                 <div className="space-y-3 rounded-[1.6rem] bg-[#f8fdff] p-4">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-[#7b8489]">
                     <Activity className="h-4 w-4" />
-                    Active observation
+                    {language === "zh" ? "主动观察" : "Active observation"}
                   </div>
                   <div className="rounded-[1rem] border-2 border-[#e8f3f6] bg-white p-3">
-                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[#5d666a]">
-                      {logicTrace}
-                    </pre>
-                    <p className="mt-3 text-xs leading-relaxed text-[#6f787c]">
-                      Plain language: we look at elapsed focus time, whether tasks have moved forward, and whether you&apos;ve
-                      parked distractions—then tune how loudly the companion speaks.
-                    </p>
+                    {observationSections ? (
+                      <div className="space-y-4 text-xs leading-6 text-[#6b7276]">
+                        <div>
+                          {observationSections.statusLines.map((line) => (
+                            <div key={line}>{line}</div>
+                          ))}
+                        </div>
+                        <div className="border-t border-dashed border-[#d8ebef]" />
+                        <div>
+                          {observationSections.focusLines.map((line) => (
+                            <div key={line}>{line}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs leading-relaxed text-[#6f787c]">
+                        {language === "zh" ? "等待陪伴状态数据..." : "Waiting for companion status..."}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2"> 
                   <div className="rounded-[1.4rem] border-2 border-[#d8ebef] bg-[#eef9fb] p-4">
-                    <p className="text-xs font-bold uppercase tracking-wide text-[#5fa9ba]">Mindful tip</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#5fa9ba]">
+                      {language === "zh" ? "放松提示" : "Mindful tip"}
+                    </p>
                     <p className="mt-2 text-sm leading-snug text-[#47646b]">
-                      Lower your shoulders and unclench your jaw—two quick resets that signal safety to your nervous system.
+                      {language === "zh"
+                        ? "把肩膀放低，轻轻松开下颌。两个小动作就能先把身体从紧绷里拉回来。"
+                        : "Lower your shoulders and unclench your jaw. Two small resets can tell your nervous system it is safe to ease up."}
                     </p>
                   </div>
                   <div className="rounded-[1.4rem] border-2 border-[#d8ebef] bg-[#eef9fb] p-4">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#5fa9ba]">
                       <Lightbulb className="h-3.5 w-3.5" />
-                      Insight
+                      {language === "zh" ? "洞察" : "Insight"}
                     </div>
                     <p className="mt-2 text-sm leading-snug text-[#47646b]">
-                      Creative blocks are often just processing phases. Smaller next steps usually beat waiting for clarity.
+                      {language === "zh"
+                        ? "很多卡住并不是做不到，而是大脑还在处理。先推进一个更小的下一步，通常比等“想清楚”更有效。"
+                        : "Creative blocks are often just processing phases. Smaller next steps usually beat waiting for clarity."}
                     </p>
                   </div>
                 </div>
@@ -825,7 +983,7 @@ export function ActiveWorkflow() {
                     opacity: { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
                     boxShadow: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
                   }}
-                  className={`flex items-start gap-3 rounded-[1.3rem] border-2 p-4 transition-all ${
+                  className={`relative flex items-start gap-3 rounded-[1.3rem] border-2 p-4 transition-all ${
                     task.completed || pendingCompletionIds.includes(task.id)
                       ? "bg-[#eff9f2] border-[#cfe8de]"
                       : index === 0 && completedCount === 0
@@ -839,7 +997,7 @@ export function ActiveWorkflow() {
                     className="mt-1 size-8 rounded-md [&_[data-slot=checkbox-indicator]_svg]:size-6"
                   />
                   
-                  <div className="flex-1 space-y-2">
+                  <div className="min-w-0 flex-1 space-y-2 pr-16">
                     {editingTaskId === task.id ? (
                       <>
                         <Input
@@ -863,19 +1021,19 @@ export function ActiveWorkflow() {
                           onChange={(e) => setEditTaskPriority(e.target.value as PriorityLevel)}
                           className="w-full rounded-[1rem] border-2 border-[#edf1f5] bg-[#fbfcfd] px-3 py-2 text-sm outline-none"
                         >
-                          <option value="important-urgent">Important + Urgent</option>
-                          <option value="important-not-urgent">Important + Not Urgent</option>
-                          <option value="not-important-urgent">Not Important + Urgent</option>
-                          <option value="not-important-not-urgent">Not Important + Not Urgent</option>
+                          <option value="important-urgent">{language === "zh" ? "重要 + 紧急" : "Important + Urgent"}</option>
+                          <option value="important-not-urgent">{language === "zh" ? "重要 + 不紧急" : "Important + Not Urgent"}</option>
+                          <option value="not-important-urgent">{language === "zh" ? "不重要 + 紧急" : "Not Important + Urgent"}</option>
+                          <option value="not-important-not-urgent">{language === "zh" ? "不重要 + 不紧急" : "Not Important + Not Urgent"}</option>
                         </select>
                         <div className="flex flex-wrap gap-2">
                           <Button size="sm" className="rounded-[1rem] bg-[#ff9d8d] text-white hover:bg-[#ff8c79]" onClick={() => saveTaskEdits(task.id)}>
                             <Save className="w-4 h-4 mr-1" />
-                            Save
+                            {language === "zh" ? "保存" : "Save"}
                           </Button>
                           <Button size="sm" variant="outline" className="rounded-[1rem] border-2 border-[#edf1f5]" onClick={cancelEditingTask}>
                             <X className="w-4 h-4 mr-1" />
-                            Cancel
+                            {language === "zh" ? "取消" : "Cancel"}
                           </Button>
                           <Button
                             size="sm"
@@ -884,7 +1042,7 @@ export function ActiveWorkflow() {
                             onClick={() => deleteTask(task.id)}
                           >
                             <Trash2 className="w-4 h-4 mr-1" />
-                            Delete
+                            {language === "zh" ? "删除" : "Delete"}
                           </Button>
                         </div>
                       </>
@@ -903,12 +1061,12 @@ export function ActiveWorkflow() {
                           </span>
                           {index === 0 && !task.completed && !pendingCompletionIds.includes(task.id) && completedCount === 0 && (
                             <span className="ml-2 rounded-full bg-[#fff8df] px-2 py-0.5 text-xs font-bold text-[#d2a12d]">
-                              Start here! <ArrowRight className="w-3 h-3 inline ml-1" />
+                              {language === "zh" ? "从这里开始" : "Start here!"} <ArrowRight className="w-3 h-3 inline ml-1" />
                             </span>
                           )}
                           {pendingCompletionIds.includes(task.id) && (
                             <span className="rounded-full bg-[#eff9f2] px-2 py-0.5 text-xs font-bold text-[#65b99d]">
-                              Completing...
+                              {language === "zh" ? "完成中..." : "Completing..."}
                             </span>
                           )}
                         </div>
@@ -921,7 +1079,7 @@ export function ActiveWorkflow() {
                           />
                         )}
                         {task.note && (
-                          <p className="rounded-[0.9rem] border border-[#edf1f5] bg-white px-2 py-1 text-xs text-[#5d666a]">
+                          <p className="w-full rounded-[0.9rem] border border-[#edf1f5] bg-white px-2 py-1 text-xs text-[#5d666a]">
                             {task.note}
                           </p>
                         )}
@@ -929,7 +1087,7 @@ export function ActiveWorkflow() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="absolute right-4 top-4 flex items-center gap-2">
                     {editingTaskId !== task.id && (
                       <Button
                         size="icon"
@@ -961,7 +1119,9 @@ export function ActiveWorkflow() {
 
               <div className="space-y-3 rounded-[1.4rem] border-2 border-dashed border-[#d8ebef] bg-[#f8fdff] p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">Add a custom task</p>
+                  <p className="text-sm font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">
+                    {language === "zh" ? "添加自定义任务" : "Add a custom task"}
+                  </p>
                   <Button
                     size="icon"
                     variant="outline"
@@ -976,19 +1136,19 @@ export function ActiveWorkflow() {
                 {isAddTaskExpanded && (
                   <>
                     <Input
-                      placeholder="Task name"
+                      placeholder={language === "zh" ? "任务名称" : "Task name"}
                       value={newTaskName}
                       onChange={(e) => setNewTaskName(e.target.value)}
                       className="rounded-[1rem] border-2 border-[#edf1f5]"
                     />
                     <Input
-                      placeholder="Estimated time (e.g., 15 min)"
+                      placeholder={language === "zh" ? "预估时长（例如 15 分钟）" : "Estimated time (e.g., 15 min)"}
                       value={newTaskDuration}
                       onChange={(e) => setNewTaskDuration(e.target.value)}
                       className="rounded-[1rem] border-2 border-[#edf1f5]"
                     />
                     <Textarea
-                      placeholder="Notes (optional)"
+                      placeholder={language === "zh" ? "备注（可选）" : "Notes (optional)"}
                       value={newTaskNote}
                       onChange={(e) => setNewTaskNote(e.target.value)}
                       className="min-h-20 rounded-[1rem] border-2 border-[#edf1f5]"
@@ -998,14 +1158,14 @@ export function ActiveWorkflow() {
                       onChange={(e) => setNewTaskPriority(e.target.value as PriorityLevel)}
                       className="w-full rounded-[1rem] border-2 border-[#edf1f5] bg-white px-3 py-2 text-sm outline-none"
                     >
-                      <option value="important-urgent">Important + Urgent</option>
-                      <option value="important-not-urgent">Important + Not Urgent</option>
-                      <option value="not-important-urgent">Not Important + Urgent</option>
-                      <option value="not-important-not-urgent">Not Important + Not Urgent</option>
+                      <option value="important-urgent">{language === "zh" ? "重要 + 紧急" : "Important + Urgent"}</option>
+                      <option value="important-not-urgent">{language === "zh" ? "重要 + 不紧急" : "Important + Not Urgent"}</option>
+                      <option value="not-important-urgent">{language === "zh" ? "不重要 + 紧急" : "Not Important + Urgent"}</option>
+                      <option value="not-important-not-urgent">{language === "zh" ? "不重要 + 不紧急" : "Not Important + Not Urgent"}</option>
                     </select>
                     <Button onClick={addTask} size="sm" className="w-full rounded-[1rem] bg-[#a8e6cf] text-[#2d3436] hover:bg-[#94ddc1] sm:w-auto">
                       <Plus className="w-4 h-4 mr-1" />
-                      Add Task
+                      {language === "zh" ? "添加任务" : "Add Task"}
                     </Button>
                   </>
                 )}
@@ -1018,7 +1178,7 @@ export function ActiveWorkflow() {
             onClick={handleFinishSession}
             className="h-14 w-full rounded-[1.35rem] bg-[#ff9d8d] text-base font-bold text-white shadow-[0_12px_24px_rgba(255,157,141,0.28)] hover:bg-[#ff8c79]"
           >
-            Finish Session & View Results
+            {language === "zh" ? "结束本轮并查看结果" : "Finish Session & View Results"}
           </Button>
         </div>
       </div>
@@ -1041,3 +1201,8 @@ export function ActiveWorkflow() {
     </>
   );
 }
+
+export { ActiveWorkflow };
+export default ActiveWorkflow;
+
+

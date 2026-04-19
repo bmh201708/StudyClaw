@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { Bot, MessageCircle, SendHorizonal, Wrench, X } from "lucide-react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useAiSettings } from "../contexts/AiSettingsContext";
+import { useBilling } from "../contexts/BillingContext";
+import { useLanguage } from "../contexts/LanguageContext";
+import { isInsufficientCreditsApiError } from "../lib/billingApi";
 import { sendWorkflowAssistantMessage, type WorkflowChatMessage, type WorkflowChatTask } from "../lib/workflowChatApi";
 
 type WorkflowAssistantChatProps = {
@@ -24,12 +28,16 @@ export function WorkflowAssistantChat({
   distractions,
   sessionId,
 }: WorkflowAssistantChatProps) {
+  const navigate = useNavigate();
   const { settings } = useAiSettings();
+  const { language } = useLanguage();
+  const { refreshSubscription } = useBilling();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<WorkflowChatMessage[]>([initialAssistantMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const [toolsUsed, setToolsUsed] = useState<string[]>([]);
+  const [creditError, setCreditError] = useState<string | null>(null);
 
   const isDefaultMode = settings?.mode === "default";
   const completedCount = useMemo(() => tasks.filter((task) => task.completed).length, [tasks]);
@@ -54,6 +62,7 @@ export function WorkflowAssistantChat({
     const nextMessages = [...messages, { role: "user" as const, content }];
     setMessages(nextMessages);
     setDraft("");
+    setCreditError(null);
     setIsLoading(true);
 
     try {
@@ -73,13 +82,31 @@ export function WorkflowAssistantChat({
 
       setMessages((prev) => [...prev, { role: "assistant", content: response.message }]);
       setToolsUsed(response.toolsUsed ?? []);
+      await refreshSubscription();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "聊天助手暂时不可用");
+      if (isInsufficientCreditsApiError(error)) {
+        setCreditError(
+          language === "zh"
+            ? `当前余额 ${error.payload.currentCredits} credits，不足以继续默认 AI 聊天。`
+            : `You only have ${error.payload.currentCredits} credits left, which is not enough for more default AI chat.`,
+        );
+        return;
+      }
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : language === "zh"
+            ? "聊天助手暂时不可用"
+            : "The workflow assistant is unavailable right now.",
+      );
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "I couldn't reach the workflow assistant just now. Try again in a moment.",
+          content:
+            language === "zh"
+              ? "我刚刚没能连上聊天助手，稍后再试一次。"
+              : "I couldn't reach the workflow assistant just now. Try again in a moment.",
         },
       ]);
     } finally {
@@ -135,6 +162,18 @@ export function WorkflowAssistantChat({
           </div>
 
           <div className="border-t border-[#edf1f5] px-4 py-4">
+            {creditError && (
+              <div className="mb-3 rounded-[1.2rem] border border-[#ffd4cc] bg-[#fff2ef] px-4 py-3 text-sm text-[#8a4e43]">
+                <p>{creditError}</p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/pricing")}
+                  className="mt-3 inline-flex items-center rounded-full bg-[#ff9d8d] px-3 py-1.5 text-xs font-bold text-white"
+                >
+                  {language === "zh" ? "查看套餐" : "Upgrade"}
+                </button>
+              </div>
+            )}
             {toolsUsed.length > 0 && (
               <div className="mb-3 flex flex-wrap gap-2">
                 {toolsUsed.map((tool) => (

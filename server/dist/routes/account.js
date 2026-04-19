@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { accountStore } from "../account.js";
 import { requireUser } from "../auth.js";
+import { getSubscriptionResponse } from "../billing.js";
 export const accountRouter = Router();
 function normalizeText(value) {
     return typeof value === "string" ? value.trim() : "";
@@ -155,5 +156,18 @@ accountRouter.get("/stats", async (req, res) => {
     catch (error) {
         console.error("[account/stats]", error);
         res.status(500).json({ error: "failed to load account stats" });
+    }
+});
+accountRouter.get("/subscription", async (req, res) => {
+    const user = await requireUser(req, res);
+    if (!user)
+        return;
+    try {
+        const subscription = await getSubscriptionResponse(user.id);
+        res.json(subscription);
+    }
+    catch (error) {
+        console.error("[account/subscription]", error);
+        res.status(500).json({ error: "failed to load subscription" });
     }
 });

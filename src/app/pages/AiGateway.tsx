@@ -8,12 +8,14 @@ import { Input } from "../components/ui/input";
 import { AiSettingsFormFields, defaultAiFormState } from "../components/AiSettingsFormFields";
 import { useAuth } from "../contexts/AuthContext";
 import { useAiSettings } from "../contexts/AiSettingsContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import { normalizeAiSettings, type AiSettings } from "../lib/aiSettingsStorage";
 
 export function AiGateway() {
   const navigate = useNavigate();
   const { isAuthenticated, user, login, logout, register } = useAuth();
   const { isConfigured, settings, setSettings } = useAiSettings();
+  const { language } = useLanguage();
   const [form, setForm] = useState<AiSettings>(() => settings ?? defaultAiFormState());
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [isAuthLoading, setIsAuthLoading] = useState(false);
@@ -146,6 +148,14 @@ export function AiGateway() {
                 StudyClaw is more than just a tool. It&apos;s a peaceful space where your focus flourishes.
                 Let&apos;s set up your AI Companion to begin our journey.
               </p>
+              <button
+                type="button"
+                onClick={() => navigate("/pricing")}
+                className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#8f4338] underline-offset-4 hover:underline"
+              >
+                {language === "zh" ? "查看套餐" : "See plans"}
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
           </section>
 

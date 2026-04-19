@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import type { Request, Response } from "express";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { ensureUserSubscription } from "./billing.js";
 import { mapUser, pool } from "./db.js";
 import type { User } from "./types.js";
 
@@ -106,6 +107,7 @@ export async function registerUser(input: {
   );
 
   const row = result.rows[0];
+  await ensureUserSubscription(row.id);
   const token = await issueToken(row.id);
 
   return {

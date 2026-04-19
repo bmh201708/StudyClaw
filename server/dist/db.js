@@ -103,6 +103,34 @@ export async function initDb() {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
+            await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+          user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
+          plan_code TEXT NOT NULL DEFAULT 'free',
+          status TEXT NOT NULL DEFAULT 'active',
+          current_credits INTEGER NOT NULL DEFAULT 1000,
+          weekly_credit_allowance INTEGER NOT NULL DEFAULT 1000,
+          next_credit_reset_at TIMESTAMPTZ NOT NULL,
+          started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+            await pool.query(`
+        CREATE TABLE IF NOT EXISTS credit_ledger (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+          plan_code TEXT NOT NULL,
+          delta_credits INTEGER NOT NULL,
+          balance_after INTEGER NOT NULL,
+          reason TEXT NOT NULL,
+          metadata_json JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+            await pool.query(`
+        CREATE INDEX IF NOT EXISTS credit_ledger_user_created_idx
+        ON credit_ledger (user_id, created_at DESC);
+      `);
         })();
     }
     return initPromise;
@@ -200,5 +228,29 @@ export function mapAccountStatsPoint(row) {
         date,
         focusTime: Number(row.focus_time || 0),
         completedSessions: Number(row.completed_sessions || 0),
+    };
+}
+export function mapSubscriptionSummary(row) {
+    return {
+        userId: row.user_id,
+        planCode: row.plan_code,
+        status: row.status,
+        currentCredits: row.current_credits,
+        weeklyCreditAllowance: row.weekly_credit_allowance,
+        nextCreditResetAt: toIso(row.next_credit_reset_at),
+        startedAt: toIso(row.started_at),
+        updatedAt: toIso(row.updated_at),
+    };
+}
+export function mapCreditLedgerItem(row) {
+    return {
+        id: row.id,
+        userId: row.user_id,
+        planCode: row.plan_code,
+        deltaCredits: row.delta_credits,
+        balanceAfter: row.balance_after,
+        reason: row.reason,
+        ...(row.metadata_json ? { metadataJson: row.metadata_json } : {}),
+        createdAt: toIso(row.created_at),
     };
 }

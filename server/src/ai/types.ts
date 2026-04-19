@@ -46,6 +46,11 @@ export type OpenAiCompatibleResponse = {
   choices?: Array<{
     message?: OpenAiCompatibleMessage;
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
 };
 
 export type OpenAiCompatibleToolDefinition = {
@@ -100,6 +105,7 @@ export type WorkflowAssistantResult = {
   message: string;
   model: string;
   toolsUsed: string[];
+  totalTokens?: number;
 };
 
 export type WorkflowAssistantToolContext = {

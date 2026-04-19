@@ -30,6 +30,14 @@ export class SessionStore {
         const row = result.rows[0];
         return row ? mapSession(row) : undefined;
     }
+    async delete(userId, id) {
+        await pool.query(`
+        DELETE FROM workflow_sessions
+        WHERE id = $1
+          AND user_id = $2
+          AND status = 'active'
+      `, [id, userId]);
+    }
     async patch(userId, id, patch) {
         const values = [id, userId];
         const sets = ["updated_at = NOW()"];

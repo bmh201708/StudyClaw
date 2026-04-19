@@ -45,6 +45,52 @@ export interface User {
   updatedAt: string;
 }
 
+export type PlanCode = "free" | "starter" | "plus";
+
+export interface PlanCatalogItem {
+  planCode: PlanCode;
+  label: string;
+  monthlyPriceUsd?: number;
+  weeklyCredits: number;
+  includesDefaultAi: boolean;
+  aiSmashCost: number;
+  chatCreditsPer1kTokens: number;
+}
+
+export interface SubscriptionSummary {
+  userId: string;
+  planCode: PlanCode;
+  status: "active";
+  currentCredits: number;
+  weeklyCreditAllowance: number;
+  nextCreditResetAt: string;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface CreditLedgerItem {
+  id: string;
+  userId: string;
+  planCode: PlanCode;
+  deltaCredits: number;
+  balanceAfter: number;
+  reason: string;
+  metadataJson?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface SubscriptionResponse extends SubscriptionSummary {
+  plans: PlanCatalogItem[];
+}
+
+export interface InsufficientCreditsErrorResponse {
+  error: "insufficient credits";
+  currentCredits: number;
+  requiredCredits: number;
+  planCode: PlanCode;
+  upgradePath: "/pricing";
+}
+
 export type ThemeVariant = "radiant";
 export type UiDensity = "comfortable" | "compact";
 

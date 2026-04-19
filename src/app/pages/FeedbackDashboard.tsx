@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { createSavedProgress } from "../lib/progressApi";
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface SessionData {
   focusTime: number;
@@ -52,15 +53,15 @@ function formatMinutesHuman(seconds: number): string {
   return `${mins}m`;
 }
 
-function normalizeBossLabel(input: string, index: number): string {
+function normalizeBossLabel(input: string, index: number, language: "zh" | "en"): string {
   const cleaned = input.replace(/\s+/g, " ").trim();
-  if (!cleaned) return `Distraction Boss ${index + 1}`;
-  const short = cleaned.length > 38 ? `${cleaned.slice(0, 35)}...` : cleaned;
-  return short;
+  if (!cleaned) return language === "zh" ? `干扰源 ${index + 1}` : `Distraction Boss ${index + 1}`;
+  return cleaned.length > 38 ? `${cleaned.slice(0, 35)}...` : cleaned;
 }
 
 export function FeedbackDashboard() {
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [breatherOpen, setBreatherOpen] = useState(false);
 
@@ -107,13 +108,15 @@ export function FeedbackDashboard() {
   const coachBadges = useMemo(() => {
     if (!sessionData) return [];
     return [
-      `${formatMinutesHuman(sessionData.focusTime)} streak`,
+      language === "zh" ? `${formatMinutesHuman(sessionData.focusTime)} 连续专注` : `${formatMinutesHuman(sessionData.focusTime)} streak`,
       sessionData.completedTasks >= Math.max(3, Math.floor(sessionData.totalTasks * 0.6))
-        ? "Brainiac mode"
-        : "Quest runner",
-      sessionData.distractionCount <= 2 ? "Focus god" : "Bounce-back hero",
+        ? (language === "zh" ? "高效模式" : "Brainiac mode")
+        : (language === "zh" ? "任务推进者" : "Quest runner"),
+      sessionData.distractionCount <= 2
+        ? (language === "zh" ? "专注稳定" : "Focus god")
+        : (language === "zh" ? "恢复很快" : "Bounce-back hero"),
     ];
-  }, [sessionData]);
+  }, [language, sessionData]);
 
   const bossCards = useMemo(() => {
     if (!sessionData) return [];
@@ -126,46 +129,49 @@ export function FeedbackDashboard() {
 
     return sources.slice(0, 2).map((entry, index) => ({
       icon: index === 0 ? HeartCrack : Mail,
-      iconTone:
-        index === 0
-          ? "bg-[#fff1ef] text-[#ff9d8d]"
-          : "bg-[#eef9fb] text-[#8bc9d8]",
-      title: normalizeBossLabel(entry, index),
+      iconTone: index === 0 ? "bg-[#fff1ef] text-[#ff9d8d]" : "bg-[#eef9fb] text-[#8bc9d8]",
+      title: normalizeBossLabel(entry, index, language),
       subtitle:
         index === 0
-          ? `${Math.max(1, sessionData.distractionCount - 1)} failed attacks detected`
-          : `${Math.max(1, Math.ceil(sessionData.distractionCount / 2))} pings parried`,
+          ? (language === "zh"
+              ? `检测到 ${Math.max(1, sessionData.distractionCount - 1)} 次干扰冲击`
+              : `${Math.max(1, sessionData.distractionCount - 1)} failed attacks detected`)
+          : (language === "zh"
+              ? `化解了 ${Math.max(1, Math.ceil(sessionData.distractionCount / 2))} 次提醒干扰`
+              : `${Math.max(1, Math.ceil(sessionData.distractionCount / 2))} pings parried`),
       minutes: `${String(Math.max(2, Math.floor(sessionData.focusTime / 60 / (index + 5)))).padStart(2, "0")} min`,
-      tag: index === 0 ? "DMG taken" : "Parried",
+      tag: index === 0 ? (language === "zh" ? "受击" : "DMG taken") : (language === "zh" ? "格挡" : "Parried"),
       tagTone: index === 0 ? "text-[#ff9d8d]" : "text-[#8bc9d8]",
     }));
-  }, [sessionData]);
+  }, [language, sessionData]);
 
   const achievements = useMemo(() => {
     if (!sessionData) return [];
     return [
       {
-        label: "Deep Focus Star Award",
+        label: language === "zh" ? "深度专注之星" : "Deep Focus Star Award",
         icon: Star,
         tone: "text-[#ffd97d]",
       },
       {
-        label: `Daily Streak x${Math.max(3, sessionData.completedTasks)}`,
+        label: language === "zh" ? `今日连胜 x${Math.max(3, sessionData.completedTasks)}` : `Daily Streak x${Math.max(3, sessionData.completedTasks)}`,
         icon: Flame,
         tone: "text-[#ff9d8d]",
       },
       {
-        label: sessionData.distractionCount <= 2 ? "Unstoppable!" : "Recovered Fast",
+        label: sessionData.distractionCount <= 2
+          ? (language === "zh" ? "势不可挡" : "Unstoppable!")
+          : (language === "zh" ? "恢复很快" : "Recovered Fast"),
         icon: ShieldCheck,
         tone: "text-[#a8e6cf]",
       },
       {
-        label: "Session Champ",
+        label: language === "zh" ? "本轮优胜" : "Session Champ",
         icon: Trophy,
         tone: "text-[#f8b9a8]",
       },
     ];
-  }, [sessionData]);
+  }, [language, sessionData]);
 
   const handleShareReport = async () => {
     const text = sessionData
@@ -176,13 +182,15 @@ export function FeedbackDashboard() {
     try {
       if (navigator.share) {
         await navigator.share({ title: "StudyClaw Session", text, url });
-        toast.success("已唤起系统分享");
+        toast.success(language === "zh" ? "已调用系统分享" : "Opened the system share sheet");
       } else {
         await navigator.clipboard.writeText(`${text}\n${url}`);
-        toast.success("摘要已复制到剪贴板");
+        toast.success(language === "zh" ? "摘要已复制到剪贴板" : "Summary copied to the clipboard");
       }
     } catch (error) {
-      if ((error as Error).name !== "AbortError") toast.error("分享未完成，请重试");
+      if ((error as Error).name !== "AbortError") {
+        toast.error(language === "zh" ? "分享未完成，请重试" : "Sharing did not finish. Please try again.");
+      }
     }
   };
 
@@ -210,7 +218,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("已下载 Markdown 摘要");
+    toast.success(language === "zh" ? "已下载 Markdown 摘要" : "Downloaded the Markdown summary");
   };
 
   const handleArchiveSession = () => {
@@ -228,11 +236,11 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
     })
       .then(() => {
         sessionStorage.removeItem("sessionData");
-        toast.success("进度已保存到云端");
+        toast.success(language === "zh" ? "进度已保存到云端" : "Progress has been saved to the cloud");
         navigate("/setup");
       })
       .catch((error) => {
-        toast.error(error instanceof Error ? error.message : "保存进度失败");
+        toast.error(error instanceof Error ? error.message : (language === "zh" ? "保存进度失败" : "Failed to save progress"));
       });
   };
 
@@ -242,15 +250,12 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
   };
 
   if (!sessionData) {
-    return <div className="text-slate-500">加载中…</div>;
+    return <div className="text-slate-500">{language === "zh" ? "加载中..." : "Loading..."}</div>;
   }
 
   return (
     <>
-      <div
-        className="relative overflow-hidden rounded-[2.5rem] bg-[#f7f9fc] px-4 py-6 sm:px-6 lg:px-10"
-        style={{ fontFamily: '"Nunito", ui-sans-serif, system-ui, sans-serif' }}
-      >
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-[#f7f9fc] px-4 py-6 sm:px-6 lg:px-10" style={{ fontFamily: '"Nunito", ui-sans-serif, system-ui, sans-serif' }}>
         <div className="pointer-events-none absolute right-[-8%] top-8 h-72 w-72 rounded-full bg-[#a8e6cf]/15 blur-[110px]" />
         <div className="pointer-events-none absolute bottom-[-8%] left-[-4%] h-80 w-80 rounded-full bg-[#aed9e0]/18 blur-[120px]" />
 
@@ -258,15 +263,12 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
           <div>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#bfe8d7] bg-[#eff9f2] px-4 py-1.5 text-sm font-bold text-[#4b6c61]">
               <Sparkles className="h-4 w-4" />
-              LEVEL UP!
+              {language === "zh" ? "升级完成" : "LEVEL UP!"}
             </div>
-            <h1
-              className="text-4xl font-bold leading-[0.95] text-[#2d3436] sm:text-5xl lg:text-6xl"
-              style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-            >
-              Your Epic Session
+            <h1 className="text-4xl font-bold leading-[0.95] text-[#2d3436] sm:text-5xl lg:text-6xl" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
+              {language === "zh" ? "本次专注总结" : "Your Epic Session"}
               <br />
-              <span className="italic text-[#ff9d8d]">Milestones.</span>
+              <span className="italic text-[#ff9d8d]">{language === "zh" ? "里程碑" : "Milestones."}</span>
             </h1>
           </div>
 
@@ -275,7 +277,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
               type="button"
               onClick={handleShareReport}
               className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] border-b-4 border-[#eceff4] bg-white text-[#636e72] transition-all hover:translate-y-[2px] hover:border-b-0"
-              aria-label="Share report"
+              aria-label={language === "zh" ? "分享报告" : "Share report"}
             >
               <Share2 className="h-5 w-5" />
             </button>
@@ -283,7 +285,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
               type="button"
               onClick={handleSaveSummary}
               className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] border-b-4 border-[#eceff4] bg-white text-[#636e72] transition-all hover:translate-y-[2px] hover:border-b-0"
-              aria-label="Download summary"
+              aria-label={language === "zh" ? "下载摘要" : "Download summary"}
             >
               <Download className="h-5 w-5" />
             </button>
@@ -300,18 +302,14 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
                 <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-[#ffe7e2] text-[#ff9d8d]">
                   <Sparkles className="h-6 w-6" />
                 </div>
-                <h2
-                  className="text-2xl font-bold text-[#2d3436]"
-                  style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-                >
-                  Coach Claws says...
+                <h2 className="text-2xl font-bold text-[#2d3436]" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
+                  {language === "zh" ? "学习爪教练说" : "Coach Claws says..."}
                 </h2>
               </div>
               <p className="text-lg font-medium leading-relaxed text-[#3f474a]">
-                &quot;OMG! <span className="rounded-md bg-[#e4f6ea] px-1.5">You totally crushed your focus goal!</span>{" "}
-                You stayed locked in for {formatMinutesHuman(sessionData.focusTime)} and cleared{" "}
-                {sessionData.completedTasks} of {sessionData.totalTasks} quests. Today&apos;s mission around{" "}
-                {sessionData.goal.toLowerCase()} didn&apos;t stand a chance against your focus-power.&quot;
+                {language === "zh"
+                  ? `你这轮状态很好。你连续专注了 ${formatMinutesHuman(sessionData.focusTime)}，完成了 ${sessionData.completedTasks}/${sessionData.totalTasks} 个任务，围绕“${sessionData.goal}”的推进已经很扎实。`
+                  : `OMG! You totally crushed your focus goal! You stayed locked in for ${formatMinutesHuman(sessionData.focusTime)} and cleared ${sessionData.completedTasks} of ${sessionData.totalTasks} quests.`}
               </p>
             </div>
             <div className="relative z-10 mt-8 flex flex-wrap gap-3">
@@ -319,11 +317,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
                 <span
                   key={badge}
                   className={`rounded-full px-4 py-1.5 text-xs font-extrabold uppercase tracking-[0.16em] shadow-sm ${
-                    index === 0
-                      ? "bg-[#a8e6cf] text-white"
-                      : index === 1
-                        ? "bg-[#aed9e0] text-[#2d3436]"
-                        : "bg-[#ffd97d] text-[#2d3436]"
+                    index === 0 ? "bg-[#a8e6cf] text-white" : index === 1 ? "bg-[#aed9e0] text-[#2d3436]" : "bg-[#ffd97d] text-[#2d3436]"
                   }`}
                 >
                   {badge}
@@ -333,18 +327,12 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
           </section>
 
           <section className="rounded-[2rem] border-4 border-[#d7eff3]/40 bg-[#f0fbfc] p-8 shadow-[0_8px_0_rgba(0,0,0,0.03)] md:col-span-4">
-            <h3
-              className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.24em] text-[#7db6c3]"
-              style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-            >
+            <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.24em] text-[#7db6c3]" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
               <Sparkles className="h-4 w-4" />
-              Total Grind
+              {language === "zh" ? "总专注时长" : "Total Grind"}
             </h3>
             <div className="mt-3 text-[#2d3436]">
-              <span
-                className="text-6xl font-bold leading-none"
-                style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-              >
+              <span className="text-6xl font-bold leading-none" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
                 {formatDurationClock(sessionData.focusTime)}
               </span>
               <span className="ml-2 text-xl font-bold text-[#636e72]">hrs</span>
@@ -353,11 +341,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
               {focusBars.map((bar, index) => (
                 <div
                   key={index}
-                  className={`flex-1 rounded-t-[1rem] ${
-                    bar.active
-                      ? "bg-[#ff9d8d] shadow-[0_-4px_16px_rgba(255,157,141,0.35)]"
-                      : "bg-[#9fd9e7]"
-                  }`}
+                  className={`flex-1 rounded-t-[1rem] ${bar.active ? "bg-[#ff9d8d] shadow-[0_-4px_16px_rgba(255,157,141,0.35)]" : "bg-[#9fd9e7]"}`}
                   style={{ height: `${bar.value}%` }}
                 />
               ))}
@@ -365,11 +349,8 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
           </section>
 
           <section className="rounded-[2rem] border-4 border-transparent bg-white p-8 text-center shadow-[0_8px_0_rgba(0,0,0,0.03)] md:col-span-4">
-            <h3
-              className="mb-6 text-sm font-bold uppercase tracking-[0.24em] text-[#636e72]"
-              style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-            >
-              Quests Cleared
+            <h3 className="mb-6 text-sm font-bold uppercase tracking-[0.24em] text-[#636e72]" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
+              {language === "zh" ? "完成任务" : "Quests Cleared"}
             </h3>
             <div className="relative mx-auto flex h-44 w-44 items-center justify-center">
               <svg className="h-44 w-44 -rotate-90" viewBox="0 0 176 176" aria-hidden>
@@ -386,25 +367,19 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span
-                  className="text-4xl font-bold text-[#2d3436]"
-                  style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-                >
+                <span className="text-4xl font-bold text-[#2d3436]" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
                   {sessionData.completedTasks}/{sessionData.totalTasks}
                 </span>
                 <span className="mt-1 rounded-full bg-[#eff9f2] px-2 py-0.5 text-xs font-extrabold uppercase text-[#7fd3b4]">
-                  {Math.round(completionRatio * 100)}% done!
+                  {Math.round(completionRatio * 100)}% {language === "zh" ? "完成" : "done!"}
                 </span>
               </div>
             </div>
           </section>
 
           <section className="rounded-[2rem] border-4 border-[#f8ddd8]/45 bg-white p-8 shadow-[0_8px_0_rgba(0,0,0,0.03)] md:col-span-8">
-            <h3
-              className="mb-6 text-sm font-bold uppercase tracking-[0.24em] text-[#636e72]"
-              style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-            >
-              Bosses Defeated (Distractions)
+            <h3 className="mb-6 text-sm font-bold uppercase tracking-[0.24em] text-[#636e72]" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
+              {language === "zh" ? "击退干扰" : "Bosses Defeated (Distractions)"}
             </h3>
             <div className="space-y-3">
               {bossCards.map((boss) => {
@@ -424,10 +399,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
                       </div>
                     </div>
                     <div className="text-left sm:text-right">
-                      <div
-                        className="text-lg font-black text-[#2d3436]"
-                        style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-                      >
+                      <div className="text-lg font-black text-[#2d3436]" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
                         {boss.minutes}
                       </div>
                       <div className={`text-xs font-extrabold uppercase tracking-[0.18em] ${boss.tagTone}`}>{boss.tag}</div>
@@ -447,10 +419,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
                   className="flex min-h-[120px] flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed border-[#bfe6ef] bg-[#f8fdff] px-4 py-5 text-center"
                 >
                   <Icon className={`mb-3 h-9 w-9 ${badge.tone}`} />
-                  <p
-                    className="text-sm font-bold text-[#2d3436]"
-                    style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-                  >
+                  <p className="text-sm font-bold text-[#2d3436]" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
                     {badge.label}
                   </p>
                 </div>
@@ -464,22 +433,20 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
           <div className="absolute left-10 top-10 h-28 w-28 rounded-full bg-[#ffd97d]/30 blur-2xl" />
           <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
             <div className="max-w-xl text-center md:text-left">
-              <h2
-                className="text-3xl font-bold leading-tight md:text-4xl"
-                style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
-              >
-                Wanna go another round?
+              <h2 className="text-3xl font-bold leading-tight md:text-4xl" style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}>
+                {language === "zh" ? "还要继续一轮吗？" : "Wanna go another round?"}
               </h2>
               <p className="mt-4 text-lg font-semibold text-white/90">
-                You&apos;re on fire right now! Experts say keeping the momentum going leads to legendary results.
-                Let&apos;s get it!
+                {language === "zh"
+                  ? "你现在状态很不错，顺着这个节奏继续推进，通常最容易出结果。"
+                  : "You're on fire right now! Keeping the momentum going usually leads to the cleanest results."}
               </p>
               <button
                 type="button"
                 onClick={() => setBreatherOpen(true)}
                 className="mt-4 text-sm font-bold text-white/90 underline decoration-white/30 underline-offset-4 hover:text-white"
               >
-                Need a conscious breather first?
+                {language === "zh" ? "要不要先做一次短暂休息？" : "Need a conscious breather first?"}
               </button>
             </div>
 
@@ -489,7 +456,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
                 onClick={handleArchiveSession}
                 className="rounded-[1.35rem] border-2 border-white/35 bg-white/18 px-8 py-4 text-base font-bold text-white transition-all hover:bg-white/25"
               >
-                Save Progress
+                {language === "zh" ? "保存进度" : "Save Progress"}
               </button>
               <button
                 type="button"
@@ -497,7 +464,7 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
                 className="flex items-center justify-center gap-3 rounded-[1.35rem] bg-white px-10 py-4 text-xl font-bold text-[#ff9d8d] shadow-lg transition-all hover:-translate-y-1 hover:shadow-2xl"
                 style={{ fontFamily: '"Fredoka", ui-sans-serif, system-ui, sans-serif' }}
               >
-                Start Session
+                {language === "zh" ? "开始新一轮" : "Start Session"}
                 <PlayCircle className="h-6 w-6" />
               </button>
             </div>
@@ -508,19 +475,21 @@ ${sessionData.tasks.map((task) => `- ${task}`).join("\n")}
       <Dialog open={breatherOpen} onOpenChange={setBreatherOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>15 分钟有意识休息</DialogTitle>
+            <DialogTitle>{language === "zh" ? "15 分钟有意识休息" : "15-Minute Conscious Break"}</DialogTitle>
             <DialogDescription>
-              先离开屏幕、补水或拉伸一下，再开启下一轮冲刺。需要计时器的话可打开下面的链接。
+              {language === "zh"
+                ? "先离开屏幕、补水或拉伸一下，再开启下一轮冲刺。需要计时器的话可打开下面的链接。"
+                : "Step away from the screen, hydrate, or stretch for a bit before the next sprint. Use the timer link below if you want one."}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-2">
             <Button asChild variant="outline" className="w-full">
               <a href="https://www.google.com/search?q=15+minute+timer" target="_blank" rel="noreferrer">
-                在浏览器中打开 15 分钟计时
+                {language === "zh" ? "在浏览器中打开 15 分钟计时" : "Open a 15-minute timer"}
               </a>
             </Button>
             <Button variant="secondary" onClick={() => setBreatherOpen(false)}>
-              知道了
+              {language === "zh" ? "知道了" : "Got it"}
             </Button>
           </div>
         </DialogContent>

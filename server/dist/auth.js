@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { ensureUserSubscription } from "./billing.js";
 import { mapUser, pool } from "./db.js";
 const SALT_ROUNDS = 10;
 const TOKEN_TTL_DAYS = Math.max(1, Number(process.env.AUTH_TOKEN_TTL_DAYS || "30") || 30);
@@ -61,6 +62,7 @@ export async function registerUser(input) {
       RETURNING id, email, name, password_hash, created_at, updated_at
     `, [id, normalizeEmail(input.email), input.name.trim(), passwordHash]);
     const row = result.rows[0];
+    await ensureUserSubscription(row.id);
     const token = await issueToken(row.id);
     return {
         token,

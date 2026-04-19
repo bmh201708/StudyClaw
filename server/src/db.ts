@@ -2,8 +2,11 @@ import { Pool } from "pg";
 import type {
   AccountRecentSession,
   AccountStatsPoint,
+  CreditLedgerItem,
+  PlanCatalogItem,
   SavedProgress,
   Session,
+  SubscriptionSummary,
   User,
   UserAiPreferences,
   UserPreferences,
@@ -125,6 +128,37 @@ export async function initDb(): Promise<void> {
           custom_api_key_masked TEXT,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+          user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
+          plan_code TEXT NOT NULL DEFAULT 'free',
+          status TEXT NOT NULL DEFAULT 'active',
+          current_credits INTEGER NOT NULL DEFAULT 1000,
+          weekly_credit_allowance INTEGER NOT NULL DEFAULT 1000,
+          next_credit_reset_at TIMESTAMPTZ NOT NULL,
+          started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS credit_ledger (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+          plan_code TEXT NOT NULL,
+          delta_credits INTEGER NOT NULL,
+          balance_after INTEGER NOT NULL,
+          reason TEXT NOT NULL,
+          metadata_json JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS credit_ledger_user_created_idx
+        ON credit_ledger (user_id, created_at DESC);
       `);
     })();
   }
@@ -295,5 +329,49 @@ export function mapAccountStatsPoint(row: {
     date,
     focusTime: Number(row.focus_time || 0),
     completedSessions: Number(row.completed_sessions || 0),
+  };
+}
+
+export function mapSubscriptionSummary(row: {
+  user_id: string;
+  plan_code: SubscriptionSummary["planCode"];
+  status: SubscriptionSummary["status"];
+  current_credits: number;
+  weekly_credit_allowance: number;
+  next_credit_reset_at: Date | string;
+  started_at: Date | string;
+  updated_at: Date | string;
+}): SubscriptionSummary {
+  return {
+    userId: row.user_id,
+    planCode: row.plan_code,
+    status: row.status,
+    currentCredits: row.current_credits,
+    weeklyCreditAllowance: row.weekly_credit_allowance,
+    nextCreditResetAt: toIso(row.next_credit_reset_at),
+    startedAt: toIso(row.started_at),
+    updatedAt: toIso(row.updated_at),
+  };
+}
+
+export function mapCreditLedgerItem(row: {
+  id: string;
+  user_id: string;
+  plan_code: CreditLedgerItem["planCode"];
+  delta_credits: number;
+  balance_after: number;
+  reason: string;
+  metadata_json: Record<string, unknown> | null;
+  created_at: Date | string;
+}): CreditLedgerItem {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    planCode: row.plan_code,
+    deltaCredits: row.delta_credits,
+    balanceAfter: row.balance_after,
+    reason: row.reason,
+    ...(row.metadata_json ? { metadataJson: row.metadata_json } : {}),
+    createdAt: toIso(row.created_at),
   };
 }

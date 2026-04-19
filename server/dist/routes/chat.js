@@ -2,6 +2,7 @@ import { Router } from "express";
 import { mapAiServiceErrorToHttp } from "../ai/errors.js";
 import { runWorkflowAssistant } from "../ai/service.js";
 import { requireUser } from "../auth.js";
+import { assertHasCredits, consumeCredits, estimateWorkflowChatActualCredits, estimateWorkflowChatReserveCredits, isInsufficientCreditsError, } from "../billing.js";
 export const chatRouter = Router();
 function normalizeMessages(input) {
     if (!Array.isArray(input))
@@ -72,6 +73,13 @@ chatRouter.post("/workflow-assistant", async (req, res) => {
         return;
     }
     try {
+        const reserveCredits = estimateWorkflowChatReserveCredits({
+            goal,
+            messages,
+            tasks,
+            distractions,
+        });
+        await assertHasCredits(user.id, reserveCredits);
         const result = await runWorkflowAssistant({
             user,
             ...(sessionId ? { sessionId } : {}),
@@ -81,9 +89,32 @@ chatRouter.post("/workflow-assistant", async (req, res) => {
             distractions,
             messages,
         });
-        res.json(result);
+        const actualCredits = estimateWorkflowChatActualCredits({
+            totalTokens: result.totalTokens,
+            userMessageContent: messages[messages.length - 1]?.content,
+            assistantMessageContent: result.message,
+        });
+        await consumeCredits({
+            userId: user.id,
+            requiredCredits: actualCredits,
+            reason: "workflow_chat",
+            metadata: {
+                sessionId: sessionId || null,
+                totalTokens: result.totalTokens ?? null,
+                messageCount: messages.length,
+            },
+        });
+        res.json({
+            message: result.message,
+            model: result.model,
+            toolsUsed: result.toolsUsed,
+        });
     }
     catch (error) {
+        if (isInsufficientCreditsError(error)) {
+            res.status(402).json(error.payload);
+            return;
+        }
         console.error("[ai/chat]", error);
         const mapped = mapAiServiceErrorToHttp(error);
         res.status(mapped.status).json({ error: mapped.message });

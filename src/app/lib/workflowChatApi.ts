@@ -1,4 +1,5 @@
 import { apiUrl, authHeaders } from "./sessionApi";
+import { readApiError } from "./apiError";
 
 export interface WorkflowChatTask {
   id?: string;
@@ -30,11 +31,6 @@ export interface WorkflowAssistantResponse {
   toolsUsed?: string[];
 }
 
-async function readError(res: Response): Promise<string> {
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  return data.error || `request failed (${res.status})`;
-}
-
 export async function sendWorkflowAssistantMessage(
   payload: WorkflowAssistantPayload,
 ): Promise<WorkflowAssistantResponse> {
@@ -44,6 +40,6 @@ export async function sendWorkflowAssistantMessage(
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await readApiError(res);
   return (await res.json()) as WorkflowAssistantResponse;
 }

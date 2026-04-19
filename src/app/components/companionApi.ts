@@ -9,9 +9,13 @@ export type CompanionSignalMetrics = {
   faceCount?: number;
   faceCentered?: number;
   eyeOpenScore?: number;
+  headPoseScore?: number;
   headStability?: number;
   motionScore?: number;
   interactionScore?: number;
+  painScore?: number;
+  anxietyScore?: number;
+  distressScore?: number;
 };
 
 export type CompanionEvaluatePayload = {
@@ -20,6 +24,9 @@ export type CompanionEvaluatePayload = {
   unfocusDurationSec: number;
   isTimerRunning?: boolean;
   clickRecoveryRequested?: boolean;
+  manualPauseActive?: boolean;
+  distressLocked?: boolean;
+  tiredThresholdSec?: number;
   metrics?: CompanionSignalMetrics;
 };
 
@@ -41,15 +48,21 @@ export type CompanionEvaluateResponse = {
   };
   debug: {
     attentionScore: number;
+    painScore: number;
+    anxietyScore: number;
+    distressScore: number;
+    distressLocked: boolean;
     signalsUsed: string[];
     reasons: string[];
   };
 };
 
 const UNFOCUS_THRESHOLD_SEC = 3;
-const HAPPY_THRESHOLD_SEC = 5 * 60;
-const MID_THRESHOLD_SEC = 3 * 60;
-const TIRED_THRESHOLD_SEC = 25 * 60;
+const HAPPY_WINDOW_START_SEC = 3 * 60;
+const MID_WINDOW_START_SEC = 5 * 60;
+const DEFAULT_TIRED_THRESHOLD_SEC = 25 * 60;
+const MAX_TIRED_THRESHOLD_SEC = 25 * 60;
+const DISTRESS_FORCE_TIRED_THRESHOLD = 0.74;
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -58,6 +71,38 @@ function clamp01(value: number): number {
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function scoreMotionBalance(motionScore: number): number {
+  const motion = clamp01(motionScore);
+  if (motion < 0.02) return 0.35;
+  if (motion < 0.08) return 0.72;
+  if (motion <= 0.35) return 1;
+  if (motion <= 0.6) return 0.72;
+  if (motion <= 0.82) return 0.42;
+  return 0.18;
+}
+
+function normalizeTiredThreshold(value?: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_TIRED_THRESHOLD_SEC;
+  return Math.min(MAX_TIRED_THRESHOLD_SEC, Math.max(60, Math.floor(value as number)));
+}
+
+function resolveStageWindows(tiredThresholdSec: number) {
+  if (tiredThresholdSec <= HAPPY_WINDOW_START_SEC) {
+    return { happyStartSec: tiredThresholdSec, midStartSec: tiredThresholdSec };
+  }
+  if (tiredThresholdSec <= MID_WINDOW_START_SEC) {
+    return { happyStartSec: HAPPY_WINDOW_START_SEC, midStartSec: tiredThresholdSec };
+  }
+  return { happyStartSec: HAPPY_WINDOW_START_SEC, midStartSec: MID_WINDOW_START_SEC };
+}
+
+function computeMidStageScore(focusDurationSec: number, midStartSec: number, tiredThresholdSec: number): number {
+  if (focusDurationSec <= midStartSec) return 0.8;
+  if (focusDurationSec >= tiredThresholdSec) return 0;
+  const decayProgress = (focusDurationSec - midStartSec) / Math.max(tiredThresholdSec - midStartSec, 1);
+  return round3(clamp01(0.8 * (1 - decayProgress)));
 }
 
 function deriveAttentionScore(metrics?: CompanionSignalMetrics): {
@@ -76,25 +121,68 @@ function deriveAttentionScore(metrics?: CompanionSignalMetrics): {
   const weighted: Array<[string, number, number]> = [];
   const reasons: string[] = [];
 
+  if (metrics.tabVisible === false) {
+    return {
+      score: 0.02,
+      signalsUsed: ["tabVisible"],
+      reasons: ["tab hidden -> attention forced low"],
+    };
+  }
+
+  if (metrics.faceDetected === false) {
+    return {
+      score: round3(0.08 + 0.08 * clamp01(metrics.interactionScore ?? 0)),
+      signalsUsed: ["faceDetected", "interactionScore"],
+      reasons: [
+        "face missing -> attention forced low",
+        `interaction=${round3(clamp01(metrics.interactionScore ?? 0))}`,
+      ],
+    };
+  }
+
   if (typeof metrics.tabVisible === "boolean") {
-    weighted.push(["tabVisible", metrics.tabVisible ? 1 : 0, 0.22]);
+    weighted.push(["tabVisible", metrics.tabVisible ? 1 : 0, 0.08]);
     reasons.push(metrics.tabVisible ? "tab visible" : "tab hidden");
   }
-  if (typeof metrics.faceDetected === "boolean") {
-    weighted.push(["faceDetected", metrics.faceDetected ? 1 : 0, 0.28]);
-    reasons.push(metrics.faceDetected ? "face detected" : "face missing");
+  if (typeof metrics.faceCentered === "number") {
+    const centered = clamp01(metrics.faceCentered);
+    weighted.push(["faceCentered", centered, 0.24]);
+    reasons.push(`faceCentered=${round3(centered)}`);
   }
-  if (typeof metrics.faceCentered === "number") weighted.push(["faceCentered", clamp01(metrics.faceCentered), 0.14]);
-  if (typeof metrics.eyeOpenScore === "number") weighted.push(["eyeOpenScore", clamp01(metrics.eyeOpenScore), 0.12]);
-  if (typeof metrics.headStability === "number") weighted.push(["headStability", clamp01(metrics.headStability), 0.1]);
-  if (typeof metrics.interactionScore === "number") weighted.push(["interactionScore", clamp01(metrics.interactionScore), 0.08]);
+  if (typeof metrics.eyeOpenScore === "number") {
+    const eyeOpen = clamp01(metrics.eyeOpenScore);
+    weighted.push(["eyeOpenScore", eyeOpen, 0.22]);
+    reasons.push(`eyeOpen=${round3(eyeOpen)}`);
+  }
+  if (typeof metrics.headPoseScore === "number") {
+    const headPose = clamp01(metrics.headPoseScore);
+    weighted.push(["headPoseScore", headPose, 0.2]);
+    reasons.push(`headPose=${round3(headPose)}`);
+  }
+  if (typeof metrics.headStability === "number") {
+    const headStability = clamp01(metrics.headStability);
+    weighted.push(["headStability", headStability, 0.14]);
+    reasons.push(`headStability=${round3(headStability)}`);
+  }
+  if (typeof metrics.interactionScore === "number") {
+    const interaction = clamp01(metrics.interactionScore);
+    weighted.push(["interactionScore", interaction, 0.12]);
+    reasons.push(`interaction=${round3(interaction)}`);
+  }
   if (typeof metrics.motionScore === "number") {
     const motion = clamp01(metrics.motionScore);
-    const moderateMotionScore = motion > 0.85 ? 0.45 : motion < 0.08 ? 0.55 : 1;
-    weighted.push(["motionScore", moderateMotionScore, 0.06]);
+    const motionBalance = scoreMotionBalance(motion);
+    weighted.push(["motionScore", motionBalance, 0.08]);
+    reasons.push(`motion=${round3(motion)} -> balance=${round3(motionBalance)}`);
   }
+  let penalty = 0;
   if (typeof metrics.faceCount === "number") {
-    reasons.push(metrics.faceCount > 1 ? "multiple faces detected" : "single face or unknown");
+    if (metrics.faceCount > 1) {
+      penalty += 0.12;
+      reasons.push(`faceCount=${metrics.faceCount} -> multi-face penalty`);
+    } else {
+      reasons.push("single face");
+    }
   }
 
   if (weighted.length === 0) {
@@ -106,7 +194,8 @@ function deriveAttentionScore(metrics?: CompanionSignalMetrics): {
   }
 
   const totalWeight = weighted.reduce((sum, [, , weight]) => sum + weight, 0);
-  const score = weighted.reduce((sum, [, value, weight]) => sum + value * weight, 0) / totalWeight;
+  const score =
+    weighted.reduce((sum, [, value, weight]) => sum + value * weight, 0) / totalWeight - penalty;
 
   return {
     score: round3(clamp01(score)),
@@ -163,42 +252,71 @@ function evaluateCompanionLocally(payload: CompanionEvaluatePayload): CompanionE
   const scene = payload.cameraEnabled ? "camera-on" : "camera-off";
   const focusDurationSec = Math.max(0, Math.floor(payload.focusDurationSec || 0));
   const unfocusDurationSec = Math.max(0, Math.floor(payload.unfocusDurationSec || 0));
+  const tiredThresholdSec = normalizeTiredThreshold(payload.tiredThresholdSec);
   const attention = deriveAttentionScore(payload.metrics);
+  const painScore = round3(clamp01(payload.metrics?.painScore ?? 0));
+  const anxietyScore = round3(clamp01(payload.metrics?.anxietyScore ?? 0));
+  const distressScore = round3(
+    clamp01(
+      Math.max(
+        clamp01(payload.metrics?.distressScore ?? 0),
+        painScore * 0.55 + anxietyScore * 0.45,
+        painScore,
+        anxietyScore,
+      ),
+    ),
+  );
 
   let state: CompanionState = payload.cameraEnabled ? "normal" : "happy";
-  let focusScore = payload.cameraEnabled ? Math.max(0.8, attention.score) : 1;
+  const { happyStartSec, midStartSec } = resolveStageWindows(tiredThresholdSec);
+  let focusScore = payload.cameraEnabled ? round3(Math.max(0.8, clamp01(attention.score))) : 1;
   const reasons = [...attention.reasons];
 
   if (!payload.cameraEnabled) {
-    if (focusDurationSec >= TIRED_THRESHOLD_SEC) {
+    if (focusDurationSec >= DEFAULT_TIRED_THRESHOLD_SEC) {
       state = "tired";
       focusScore = 0;
-      reasons.unshift(`camera off and usage >= ${TIRED_THRESHOLD_SEC}s`);
+      reasons.unshift(`camera off and usage >= ${DEFAULT_TIRED_THRESHOLD_SEC}s`);
     } else {
       state = "happy";
       focusScore = 1;
       reasons.unshift("camera off default state");
     }
-  } else if (unfocusDurationSec >= UNFOCUS_THRESHOLD_SEC) {
-    state = "sleep";
-    focusScore = 0;
-    reasons.unshift(`unfocused for >= ${UNFOCUS_THRESHOLD_SEC}s`);
-  } else if (focusDurationSec >= TIRED_THRESHOLD_SEC) {
+  } else if (payload.manualPauseActive) {
+    state = "happy";
+    focusScore = 1;
+    reasons.unshift("manual pause active -> keep happy until focus resumes");
+  } else if (payload.distressLocked || distressScore >= DISTRESS_FORCE_TIRED_THRESHOLD) {
     state = "tired";
     focusScore = 0;
-    reasons.unshift(`focused for >= ${TIRED_THRESHOLD_SEC}s`);
-  } else if (focusDurationSec >= HAPPY_THRESHOLD_SEC) {
+    reasons.unshift(
+      payload.distressLocked
+        ? "pain/anxiety lock is active until manual recovery"
+        : `pain/anxiety exceeded threshold (pain=${painScore}, anxiety=${anxietyScore})`,
+    );
+  } else if (unfocusDurationSec >= UNFOCUS_THRESHOLD_SEC || (unfocusDurationSec >= 2 && attention.score < 0.18)) {
+    state = "sleep";
+    focusScore = 0;
+    reasons.unshift(`unfocused for >= ${UNFOCUS_THRESHOLD_SEC}s or live attention collapsed`);
+  } else if (focusDurationSec >= tiredThresholdSec) {
+    state = "tired";
+    focusScore = 0;
+    reasons.unshift(`focused for >= ${tiredThresholdSec}s`);
+  } else if (focusDurationSec >= midStartSec) {
     state = "mid";
-    focusScore = round3(Math.max(0, 0.8 * (1 - (focusDurationSec - HAPPY_THRESHOLD_SEC) / (TIRED_THRESHOLD_SEC - HAPPY_THRESHOLD_SEC))));
-    reasons.unshift("focus duration in mid-state decay window (5-25 min)");
-  } else if (focusDurationSec >= MID_THRESHOLD_SEC) {
+    focusScore = computeMidStageScore(focusDurationSec, midStartSec, tiredThresholdSec);
+    reasons.unshift("sustained focus in dynamic mid-state window");
+  } else if (focusDurationSec >= happyStartSec) {
     state = "happy";
-    focusScore = round3(0.8 + 0.2 * ((focusDurationSec - MID_THRESHOLD_SEC) / (HAPPY_THRESHOLD_SEC - MID_THRESHOLD_SEC)));
-    reasons.unshift("focus duration in happy window (3-5 min)");
+    focusScore = round3(Math.max(0.8, clamp01(attention.score)));
+    reasons.unshift("sustained focus in dynamic happy window");
   } else {
     state = "normal";
-    focusScore = round3(Math.max(0.8, attention.score));
-    reasons.unshift("focus duration < 3 min and unfocus threshold not reached");
+    reasons.unshift(
+      attention.score >= 0.75
+        ? "camera-on baseline normal state"
+        : "temporary unfocus below sleep threshold; keep normal state",
+    );
   }
 
   return {
@@ -211,6 +329,10 @@ function evaluateCompanionLocally(payload: CompanionEvaluatePayload): CompanionE
     asset: assetFor(scene, state),
     debug: {
       attentionScore: attention.score,
+      painScore,
+      anxietyScore,
+      distressScore,
+      distressLocked: Boolean(payload.distressLocked),
       signalsUsed: attention.signalsUsed,
       reasons,
     },

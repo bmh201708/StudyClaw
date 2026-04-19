@@ -78,6 +78,18 @@ export class SessionStore {
     return row ? mapSession(row) : undefined;
   }
 
+  async delete(userId: string, id: string): Promise<void> {
+    await pool.query(
+      `
+        DELETE FROM workflow_sessions
+        WHERE id = $1
+          AND user_id = $2
+          AND status = 'active'
+      `,
+      [id, userId],
+    );
+  }
+
   async patch(
     userId: string,
     id: string,

@@ -1,24 +1,27 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { ChevronLeft, Settings2, Sparkles, UserRound } from "lucide-react";
+import { ChevronLeft, Languages, Sparkles, UserRound } from "lucide-react";
 import { HeaderAiSettings } from "./HeaderAiSettings";
 import { useAuth } from "../contexts/AuthContext";
+import { useBilling } from "../contexts/BillingContext";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currentCredits, planCode, isLoading } = useBilling();
+  const { language, toggleLanguage } = useLanguage();
+
   const steps = [
-    { path: "/setup", label: "Task Setup" },
-    { path: "/workflow", label: "Active Workflow" },
-    { path: "/dashboard", label: "Feedback Dashboard" },
+    { path: "/setup", label: language === "zh" ? "任务设置" : "Task Setup" },
+    { path: "/workflow", label: language === "zh" ? "当前流程" : "Active Workflow" },
+    { path: "/dashboard", label: language === "zh" ? "反馈看板" : "Feedback Dashboard" },
   ];
 
-  const currentIndex = steps.findIndex((step) =>
-    location.pathname.startsWith(step.path),
-  );
-
+  const currentIndex = steps.findIndex((step) => location.pathname.startsWith(step.path));
   const canGoBack = currentIndex > 0;
   const initials = (user?.name || "S").trim().slice(0, 1).toUpperCase();
+  const lowCredits = typeof currentCredits === "number" && currentCredits < 100;
 
   const handleBack = () => {
     if (!canGoBack) return;
@@ -39,7 +42,7 @@ export function Layout() {
                   type="button"
                   onClick={handleBack}
                   className="flex h-11 w-11 items-center justify-center rounded-2xl border-b-4 border-[#eceff4] bg-white text-[#636e72] transition-all hover:translate-y-[2px] hover:border-b-0"
-                  aria-label="Go back to previous step"
+                  aria-label={language === "zh" ? "返回上一步" : "Go back to previous step"}
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -82,19 +85,49 @@ export function Layout() {
             </div>
 
             <div className="flex items-center gap-3 text-[#636e72]">
-              <div className="hidden items-center gap-2 rounded-full border border-[#ffe5a7] bg-[#fff7da] px-3 py-1.5 sm:flex">
+              <button
+                type="button"
+                onClick={() => navigate("/pricing")}
+                className={`hidden items-center gap-2 rounded-full border px-3 py-1.5 sm:flex ${
+                  lowCredits
+                    ? "border-[#ffd2ca] bg-[#fff1ef]"
+                    : "border-[#ffe5a7] bg-[#fff7da]"
+                }`}
+                aria-label={language === "zh" ? "打开订阅页面" : "Open pricing page"}
+              >
                 <Sparkles className="h-3.5 w-3.5 text-[#f2be41]" />
-                <span className="text-sm font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">2,450</span>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full text-[#636e72]">
-                <Settings2 className="h-4 w-4" />
-              </div>
+                <span className="text-sm font-bold text-[#2d3436] [font-family:Fredoka,sans-serif]">
+                  {typeof currentCredits === "number"
+                    ? currentCredits.toLocaleString()
+                    : isLoading
+                      ? "..."
+                      : language === "zh"
+                        ? "套餐"
+                        : "Plans"}
+                </span>
+                {typeof currentCredits === "number" && (
+                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#8d7458]">
+                    {planCode ?? "free"}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={toggleLanguage}
+                className="flex h-10 min-w-10 items-center justify-center gap-1 rounded-full border-2 border-[#edf1f5] bg-white px-3 text-[#636e72] transition-colors hover:border-[#ffd3cb] hover:bg-[#fff7f4]"
+                aria-label={language === "zh" ? "切换语言" : "Switch language"}
+              >
+                <Languages className="h-4 w-4" />
+                <span className="text-xs font-bold [font-family:Fredoka,sans-serif]">
+                  {language === "zh" ? "中/EN" : "EN/中"}
+                </span>
+              </button>
               <HeaderAiSettings />
               <button
                 type="button"
                 onClick={() => navigate("/profile")}
                 className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#a8e6cf] text-[#2d3436] shadow-sm transition-transform hover:scale-[1.03]"
-                aria-label="Open profile center"
+                aria-label={language === "zh" ? "打开个人中心" : "Open profile center"}
               >
                 {user?.name ? (
                   <span className="text-sm font-bold [font-family:Fredoka,sans-serif]">{initials}</span>
