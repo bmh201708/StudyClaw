@@ -289,3 +289,24 @@ export interface CompanionEvaluateResponse {
     reasons: string[];
   };
 }
+
+export type RecommendationKind = "site" | "doc";
+
+export interface TaskRecommendation {
+  title: string;
+  description: string;
+  url: string;
+  kind: RecommendationKind;
+  source: "search" | "fallback";
+}
+
+export interface TaskRecommendationRequestBody {
+  taskTitle: string;
+  goal?: string;
+  language?: "zh" | "en";
+}
+
+export interface TaskRecommendationResponse {
+  query: string;
+  items: TaskRecommendation[];
+}

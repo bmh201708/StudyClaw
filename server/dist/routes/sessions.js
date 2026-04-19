@@ -1,111 +1,9 @@
 import { Router } from "express";
 import { requireUser } from "../auth.js";
 import { assertHasCredits, billingConstants, consumeCredits, isInsufficientCreditsError } from "../billing.js";
+import { fetchTaskRecommendations } from "../search.js";
 import { store } from "../store.js";
 export const sessionsRouter = Router();
-function picksForQuery(blob) {
-    const design = /design|ui|figma|brand|visual/.test(blob);
-    const code = /code|dev|software|api|build/.test(blob);
-    const write = /write|draft|document|report/.test(blob);
-    if (design) {
-        return [
-            {
-                title: "Material Design 3",
-                description: "Systems and component guidance for interface work.",
-                url: "https://m3.material.io",
-                kind: "site",
-                source: "fallback",
-            },
-            {
-                title: "WCAG 2.2 quick reference",
-                description: "Accessibility checks while you design.",
-                url: "https://www.w3.org/WAI/WCAG22/quickref/",
-                kind: "doc",
-                source: "fallback",
-            },
-            {
-                title: "Laws of UX",
-                description: "Psychology-backed design heuristics.",
-                url: "https://lawsofux.com",
-                kind: "site",
-                source: "fallback",
-            },
-        ];
-    }
-    if (code) {
-        return [
-            {
-                title: "MDN Web Docs",
-                description: "Authoritative web platform reference.",
-                url: "https://developer.mozilla.org",
-                kind: "doc",
-                source: "fallback",
-            },
-            {
-                title: "Patterns.dev",
-                description: "Modern app architecture patterns.",
-                url: "https://www.patterns.dev",
-                kind: "site",
-                source: "fallback",
-            },
-            {
-                title: "HTTP status reference",
-                description: "Quick lookup for API work.",
-                url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status",
-                kind: "doc",
-                source: "fallback",
-            },
-        ];
-    }
-    if (write) {
-        return [
-            {
-                title: "Plain language guidelines",
-                description: "Clear writing for complex ideas.",
-                url: "https://www.plainlanguage.gov/guidelines/",
-                kind: "doc",
-                source: "fallback",
-            },
-            {
-                title: "Grammarly blog writing craft",
-                description: "Structure and clarity for longform.",
-                url: "https://www.grammarly.com/blog",
-                kind: "site",
-                source: "fallback",
-            },
-            {
-                title: "Hemingway Editor",
-                description: "Readable sentence structure at a glance.",
-                url: "https://hemingwayapp.com",
-                kind: "site",
-                source: "fallback",
-            },
-        ];
-    }
-    return [
-        {
-            title: "Pomofocus",
-            description: "Timer aligned with deep work sprints.",
-            url: "https://pomofocus.io",
-            kind: "site",
-            source: "fallback",
-        },
-        {
-            title: "How to take smart notes",
-            description: "Capture ideas without breaking flow.",
-            url: "https://fortelabs.co/blog/how-to-take-smart-notes/",
-            kind: "site",
-            source: "fallback",
-        },
-        {
-            title: "Cognitive load",
-            description: "Why pauses matter mid-task.",
-            url: "https://en.wikipedia.org/wiki/Cognitive_load",
-            kind: "doc",
-            source: "fallback",
-        },
-    ];
-}
 sessionsRouter.post("/", async (req, res) => {
     const user = await requireUser(req, res);
     if (!user)
@@ -169,17 +67,14 @@ sessionsRouter.post("/recommendations", async (req, res) => {
     const user = await requireUser(req, res);
     if (!user)
         return;
-    const taskTitle = typeof req.body?.taskTitle === "string" ? req.body.taskTitle.trim() : "";
-    const goal = typeof req.body?.goal === "string" ? req.body.goal.trim() : "";
-    const query = [taskTitle, goal].filter(Boolean).join(" ").trim();
-    if (!query) {
-        res.status(400).json({ error: "taskTitle or goal is required" });
+    const body = req.body;
+    const taskTitle = body?.taskTitle?.trim() ?? "";
+    if (!taskTitle) {
+        res.status(400).json({ error: "taskTitle is required" });
         return;
     }
-    res.json({
-        query,
-        items: picksForQuery(query.toLowerCase()),
-    });
+    const result = await fetchTaskRecommendations(taskTitle, body.goal, body.language === "en" ? "en" : "zh");
+    res.json(result);
 });
 sessionsRouter.get("/:id", async (req, res) => {
     const user = await requireUser(req, res);

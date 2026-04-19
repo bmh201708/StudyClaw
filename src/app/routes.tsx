@@ -9,6 +9,7 @@ import { FeedbackDashboard } from "./pages/FeedbackDashboard";
 import { ProfileCenter } from "./pages/ProfileCenter";
 import { CompanionPreview } from "./pages/CompanionPreview";
 import { PricingPage } from "./pages/PricingPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 
 function GuardedTaskSetup() {
   return (
@@ -42,6 +43,14 @@ function GuardedProfile() {
   );
 }
 
+function GuardedNotifications() {
+  return (
+    <RequireAuth>
+      <NotificationsPage />
+    </RequireAuth>
+  );
+}
+
 export const router = createBrowserRouter(
   [
     {
@@ -56,6 +65,7 @@ export const router = createBrowserRouter(
         { path: "workflow", Component: GuardedWorkflow },
         { path: "dashboard", Component: GuardedDashboard },
         { path: "profile", Component: GuardedProfile },
+        { path: "notifications", Component: GuardedNotifications },
         { path: "pricing", Component: PricingPage },
         { path: "companion-preview", Component: CompanionPreview },
       ],

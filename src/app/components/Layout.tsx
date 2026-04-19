@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { ChevronLeft, Languages, Sparkles, UserRound } from "lucide-react";
+import { Bell, ChevronLeft, Languages, Sparkles, UserRound } from "lucide-react";
 import { HeaderAiSettings } from "./HeaderAiSettings";
 import { useAuth } from "../contexts/AuthContext";
 import { useBilling } from "../contexts/BillingContext";
@@ -22,6 +22,7 @@ export function Layout() {
   const canGoBack = currentIndex > 0;
   const initials = (user?.name || "S").trim().slice(0, 1).toUpperCase();
   const lowCredits = typeof currentCredits === "number" && currentCredits < 100;
+  const notificationsActive = location.pathname.startsWith("/notifications");
 
   const handleBack = () => {
     if (!canGoBack) return;
@@ -121,6 +122,18 @@ export function Layout() {
                 <span className="text-xs font-bold [font-family:Fredoka,sans-serif]">
                   {language === "zh" ? "中/EN" : "EN/中"}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/notifications")}
+                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
+                  notificationsActive
+                    ? "border-[#ffd3cb] bg-[#fff7f4] text-[#ff9d8d]"
+                    : "border-[#edf1f5] bg-white text-[#636e72] hover:border-[#ffd3cb] hover:bg-[#fff7f4]"
+                }`}
+                aria-label={language === "zh" ? "打开通知页面" : "Open notifications page"}
+              >
+                <Bell className="h-4 w-4" />
               </button>
               <HeaderAiSettings />
               <button
